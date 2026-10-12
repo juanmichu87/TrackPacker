@@ -1,16 +1,16 @@
+import '../../../core/formato.dart';
+
 typedef Json = Map<String, dynamic>;
 
 /// Nombre de una relación embebida por PostgREST: `clientes(nombre)` → {'nombre': …}
-String? _nombreEmbebido(Object? relacion) =>
-    relacion is Map ? relacion['nombre'] as String? : null;
+String? _nombreEmbebido(Object? relacion) => relacion is Map ? relacion['nombre'] as String? : null;
 
 DateTime? _fecha(Object? valor) => valor == null ? null : DateTime.parse(valor as String);
 
 class Rol {
   const Rol({required this.codigo, required this.nombre});
 
-  factory Rol.fromJson(Json j) =>
-      Rol(codigo: j['codigo'] as String, nombre: j['nombre'] as String);
+  factory Rol.fromJson(Json j) => Rol(codigo: j['codigo'] as String, nombre: j['nombre'] as String);
 
   final String codigo;
   final String nombre;
@@ -69,7 +69,7 @@ class Ruta {
   });
 
   factory Ruta.fromJson(Json j) {
-    final conteo = j['tiendas'];
+    final conteo = j['ruta_tiendas'];
     return Ruta(
       id: j['id'] as String,
       nombre: j['nombre'] as String,
@@ -88,6 +88,17 @@ class Ruta {
   final int numTiendas;
 }
 
+/// Ruta en la que está una tienda, con su posición en el recorrido.
+class RutaDeTienda {
+  const RutaDeTienda({required this.id, required this.nombre, this.orden});
+
+  final String id;
+  final String nombre;
+  final int? orden;
+
+  String get texto => orden == null ? nombre : '$nombre (#$orden)';
+}
+
 class Tienda {
   const Tienda({
     required this.id,
@@ -95,14 +106,13 @@ class Tienda {
     required this.clienteId,
     required this.activa,
     this.clienteNombre,
-    this.rutaId,
-    this.rutaNombre,
-    this.ordenEnRuta,
+    this.rutas = const [],
     this.direccion,
     this.codigoPostal,
     this.localidad,
   });
 
+  /// Admite la tienda con sus rutas embebidas: `ruta_tiendas(orden, rutas(id, nombre))`.
   factory Tienda.fromJson(Json j) => Tienda(
     id: j['id'] as String,
     nombre: j['nombre'] as String,
@@ -111,9 +121,15 @@ class Tienda {
     localidad: j['localidad'] as String?,
     clienteId: j['cliente_id'] as String,
     clienteNombre: _nombreEmbebido(j['clientes']),
-    rutaId: j['ruta_id'] as String?,
-    rutaNombre: _nombreEmbebido(j['rutas']),
-    ordenEnRuta: j['orden_en_ruta'] as int?,
+    rutas: [
+      for (final rt in (j['ruta_tiendas'] as List?) ?? const [])
+        if (rt['rutas'] case final Map<String, dynamic> ruta)
+          RutaDeTienda(
+            id: ruta['id'] as String,
+            nombre: ruta['nombre'] as String,
+            orden: rt['orden'] as int?,
+          ),
+    ]..sort((a, b) => compararNatural(a.nombre, b.nombre)),
     activa: j['activa'] as bool,
   );
 
@@ -124,14 +140,16 @@ class Tienda {
   final String? localidad;
   final String clienteId;
   final String? clienteNombre;
-  final String? rutaId;
-  final String? rutaNombre;
-  final int? ordenEnRuta;
+  final List<RutaDeTienda> rutas;
   final bool activa;
 
-  String get direccionCompleta => [direccion, codigoPostal, localidad]
-      .where((p) => p != null && p.trim().isNotEmpty)
-      .join(', ');
+  bool estaEnRuta(String rutaId) => rutas.any((r) => r.id == rutaId);
+
+  String get direccionCompleta => [
+    direccion,
+    codigoPostal,
+    localidad,
+  ].where((p) => p != null && p.trim().isNotEmpty).join(', ');
 }
 
 class UsuarioAdmin {
@@ -190,9 +208,15 @@ class RepartoVista {
     this.cargaConfirmadaEn,
     this.cerradoEn,
     this.motivoCierre,
+    this.salida,
   });
 
   factory RepartoVista.fromJson(Json j) => RepartoVista(
+    salida: switch ((j['salida'], j['salida_inicio'], j['salida_fin'])) {
+      (final String nombre, final String inicio, final String fin) =>
+        '$nombre ${inicio.substring(0, 5)}–${fin.substring(0, 5)}',
+      _ => null,
+    },
     id: j['id'] as String,
     estado: j['estado'] as String,
     iniciadoEn: DateTime.parse(j['iniciado_en'] as String),
@@ -221,6 +245,9 @@ class RepartoVista {
   final int entregados;
   final int pendientes;
   final int noEntregados;
+
+  /// Salida del reparto ("Mañana 06:00–10:00"), si se hizo con salida.
+  final String? salida;
 }
 
 class BultoVista {

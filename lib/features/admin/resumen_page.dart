@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/tema.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
 
@@ -10,6 +11,11 @@ class ResumenPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Nombre visible de cada rol («repartidor» → «Repartidor»)
+    final nombresRol = {
+      for (final rol in ref.watch(rolesProvider).value ?? const []) rol.codigo: rol.nombre,
+    };
+
     return VistaAsync(
       valor: ref.watch(resumenProvider),
       alReintentar: () => ref.invalidate(resumenProvider),
@@ -44,31 +50,65 @@ class ResumenPage extends ConsumerWidget {
               ),
             _Tarjetas([
               _Dato('Bultos cargados', r.bultosHoy, Icons.inventory_2_outlined, '/admin/repartos'),
-              _Dato('Entregados', r.entregadosHoy, Icons.check_circle_outline, '/admin/repartos',
-                  color: Colors.green),
-              _Dato('Pendientes', r.pendientesHoy, Icons.schedule, '/admin/repartos',
-                  color: Colors.blue),
-              _Dato('No entregados', r.noEntregadosHoy, Icons.report_outlined, '/admin/repartos',
-                  color: r.noEntregadosHoy > 0 ? Colors.red : null),
-              _Dato('Repartos en curso', r.repartosAbiertos, Icons.local_shipping_outlined,
-                  '/admin/repartos'),
-              _Dato('Incidencias abiertas', r.incidenciasAbiertas, Icons.forum_outlined, null,
-                  color: r.incidenciasAbiertas > 0 ? Colors.orange : null),
+              _Dato(
+                'Entregados',
+                r.entregadosHoy,
+                Icons.check_circle_outline,
+                '/admin/repartos',
+                color: ColoresEstado.correcto,
+              ),
+              _Dato(
+                'Pendientes',
+                r.pendientesHoy,
+                Icons.schedule,
+                '/admin/repartos',
+                color: ColoresEstado.informacion,
+              ),
+              _Dato(
+                'No entregados',
+                r.noEntregadosHoy,
+                Icons.report_outlined,
+                '/admin/repartos',
+                color: r.noEntregadosHoy > 0 ? ColoresEstado.peligro : null,
+              ),
+              _Dato(
+                'Repartos en curso',
+                r.repartosAbiertos,
+                Icons.local_shipping_outlined,
+                '/admin/repartos',
+              ),
+              _Dato(
+                'Incidencias abiertas',
+                r.incidenciasAbiertas,
+                Icons.forum_outlined,
+                null,
+                color: r.incidenciasAbiertas > 0 ? ColoresEstado.aviso : null,
+              ),
             ]),
             const SizedBox(height: 24),
             Text('Configuración', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             _Tarjetas([
               for (final MapEntry(:key, :value) in r.usuariosPorRol.entries)
-                _Dato('Usuarios · $key', value, Icons.person_outline, '/admin/usuarios'),
+                _Dato(nombresRol[key] ?? key, value, Icons.person_outline, '/admin/usuarios'),
               if (r.usuariosInactivos > 0)
-                _Dato('Usuarios inactivos', r.usuariosInactivos, Icons.person_off_outlined,
-                    '/admin/usuarios', color: Colors.grey),
+                _Dato(
+                  'Usuarios inactivos',
+                  r.usuariosInactivos,
+                  Icons.person_off_outlined,
+                  '/admin/usuarios',
+                  color: ColoresEstado.neutro,
+                ),
               _Dato('Clientes', r.clientes, Icons.business_outlined, '/admin/clientes'),
               _Dato('Rutas', r.rutas, Icons.alt_route, '/admin/rutas'),
               _Dato('Tiendas', r.tiendas, Icons.storefront_outlined, '/admin/tiendas'),
-              _Dato('Tiendas sin ruta', r.tiendasSinRuta, Icons.wrong_location_outlined,
-                  '/admin/tiendas', color: r.tiendasSinRuta > 0 ? Colors.orange : null),
+              _Dato(
+                'Tiendas sin ruta',
+                r.tiendasSinRuta,
+                Icons.wrong_location_outlined,
+                '/admin/tiendas',
+                color: r.tiendasSinRuta > 0 ? ColoresEstado.aviso : null,
+              ),
             ]),
           ],
         ),

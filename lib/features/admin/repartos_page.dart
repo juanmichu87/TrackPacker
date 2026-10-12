@@ -28,9 +28,11 @@ class _RepartosPageState extends ConsumerState<RepartosPage> {
       children: [
         BarraLista(
           pista: 'Buscar por ruta o repartidor',
-          alBuscar: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+          alBuscar: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
           filtros: [
             SegmentedButton<int>(
+              // Sin la marca ✓ el selector no cambia de ancho y la barra no salta
+              showSelectedIcon: false,
               segments: const [
                 ButtonSegment(value: 1, label: Text('Hoy')),
                 ButtonSegment(value: 7, label: Text('7 días')),
@@ -64,8 +66,8 @@ class _RepartosPageState extends ConsumerState<RepartosPage> {
               final filtrados = repartos.where((r) {
                 if (_estado != null && r.estado != _estado) return false;
                 if (_busqueda.isEmpty) return true;
-                return r.ruta.toLowerCase().contains(_busqueda) ||
-                    r.repartidor.toLowerCase().contains(_busqueda);
+                return coincideBusqueda(r.ruta, _busqueda) ||
+                    coincideBusqueda(r.repartidor, _busqueda);
               }).toList();
               if (filtrados.isEmpty) {
                 return const ListaVacia(
@@ -96,17 +98,19 @@ class _FilaReparto extends StatelessWidget {
     final progreso = r.totalBultos == 0 ? 0.0 : r.entregados / r.totalBultos;
     return ListTile(
       leading: const CircleAvatar(child: Icon(Icons.local_shipping_outlined)),
-      title: Text('${r.ruta} · ${r.repartidor}'),
+      title: Text([r.ruta, ?r.salida, r.repartidor].join(' · ')),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text([
-            fechaHora(r.iniciadoEn),
-            '${r.totalBultos} bultos',
-            '${r.entregados} entregados',
-            if (r.pendientes > 0) '${r.pendientes} pendientes',
-            if (r.noEntregados > 0) '${r.noEntregados} no entregados',
-          ].join(' · ')),
+          Text(
+            [
+              fechaHora(r.iniciadoEn),
+              '${r.totalBultos} bultos',
+              '${r.entregados} entregados',
+              if (r.pendientes > 0) '${r.pendientes} pendientes',
+              if (r.noEntregados > 0) '${r.noEntregados} no entregados',
+            ].join(' · '),
+          ),
           const SizedBox(height: 6),
           LinearProgressIndicator(value: progreso),
         ],
@@ -157,7 +161,10 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => context.go('/admin/repartos'),
                 ),
-                Text('${r.ruta} · ${r.repartidor}', style: tema.textTheme.titleLarge),
+                Text(
+                  [r.ruta, ?r.salida, r.repartidor].join(' · '),
+                  style: tema.textTheme.titleLarge,
+                ),
                 EtiquetaReparto(r.estado),
                 IconButton(
                   tooltip: 'Actualizar',
@@ -196,7 +203,7 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
                       prefixIcon: Icon(Icons.search),
                       isDense: true,
                     ),
-                    onChanged: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+                    onChanged: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
                   ),
                 ),
                 for (final e in [null, 'cargado', 'entregado', 'no_entregado', 'devolucion'])
@@ -218,8 +225,7 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
                 final filtrados = bultos.where((b) {
                   if (_estado != null && b.estado != _estado) return false;
                   if (_busqueda.isEmpty) return true;
-                  return b.codigo.contains(_busqueda) ||
-                      (b.tienda?.toLowerCase().contains(_busqueda) ?? false);
+                  return b.codigo.contains(_busqueda) || coincideBusqueda(b.tienda, _busqueda);
                 }).toList();
                 if (filtrados.isEmpty) return const ListaVacia('No hay bultos que mostrar.');
 
@@ -232,12 +238,15 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
                       dense: true,
                       leading: const Icon(Icons.qr_code_2),
                       title: Text(b.codigo, style: const TextStyle(fontFamily: 'monospace')),
-                      subtitle: Text([
-                        'Cargado ${fechaHora(b.cargadoEn)}',
-                        if (b.tienda != null) '${b.tienda}${b.cliente == null ? '' : ' (${b.cliente})'}',
-                        if (b.entregadoEn != null) 'Entregado ${fechaHora(b.entregadoEn!)}',
-                        ?b.motivo,
-                      ].join(' · ')),
+                      subtitle: Text(
+                        [
+                          'Cargado ${fechaHora(b.cargadoEn)}',
+                          if (b.tienda != null)
+                            '${b.tienda}${b.cliente == null ? '' : ' (${b.cliente})'}',
+                          if (b.entregadoEn != null) 'Entregado ${fechaHora(b.entregadoEn!)}',
+                          ?b.motivo,
+                        ].join(' · '),
+                      ),
                       trailing: EtiquetaBulto(b.estado),
                     );
                   },

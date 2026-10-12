@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/formato.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
 import 'datos/modelos.dart';
@@ -55,7 +56,7 @@ class _AreasPageState extends ConsumerState<AreasPage> {
       children: [
         BarraLista(
           pista: 'Buscar área',
-          alBuscar: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+          alBuscar: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
           textoNuevo: 'Nueva área',
           alNuevo: () => _editar(),
         ),
@@ -64,8 +65,7 @@ class _AreasPageState extends ConsumerState<AreasPage> {
             valor: ref.watch(areasProvider),
             alReintentar: _refrescar,
             datos: (areas) {
-              final filtradas =
-                  areas.where((a) => a.nombre.toLowerCase().contains(_busqueda)).toList();
+              final filtradas = areas.where((a) => coincideBusqueda(a.nombre, _busqueda)).toList();
               if (filtradas.isEmpty) {
                 return const ListaVacia(
                   'No hay áreas. Son opcionales y sirven para agrupar rutas por zona.',
@@ -84,8 +84,12 @@ class _AreasPageState extends ConsumerState<AreasPage> {
                     onTap: () => _editar(a),
                     trailing: MenuFila([
                       OpcionMenu('Editar', Icons.edit_outlined, () => _editar(a)),
-                      OpcionMenu('Eliminar', Icons.delete_outline, () => _eliminar(a),
-                          peligrosa: true),
+                      OpcionMenu(
+                        'Eliminar',
+                        Icons.delete_outline,
+                        () => _eliminar(a),
+                        peligrosa: true,
+                      ),
                     ]),
                   );
                 },
@@ -120,9 +124,9 @@ class _AreaDialogoState extends ConsumerState<_AreaDialogo> {
   Widget build(BuildContext context) {
     return DialogoFormulario(
       titulo: widget.area == null ? 'Nueva área' : 'Editar área',
-      alGuardar: () => ref
-          .read(adminRepositoryProvider)
-          .guardar('areas', widget.area?.id, {'nombre': _nombre.text.trim()}),
+      alGuardar: () => ref.read(adminRepositoryProvider).guardar('areas', widget.area?.id, {
+        'nombre': _nombre.text.trim(),
+      }),
       exito: widget.area == null ? 'Área creada' : 'Área actualizada',
       campos: [
         TextFormField(

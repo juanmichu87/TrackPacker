@@ -13,6 +13,10 @@ abstract final class Config {
   /// crear los usuarios en la base de datos.
   static const dominioUsuarios = String.fromEnvironment('AUTH_DOMINIO');
 
+  /// Versión de la base de datos que necesita esta versión de la app (la
+  /// última migración de supabase/migrations). Súbela con cada migración.
+  static const versionEsquema = 7;
+
   static bool get completa =>
       supabaseUrl.isNotEmpty && supabaseKey.isNotEmpty && dominioUsuarios.isNotEmpty;
 }

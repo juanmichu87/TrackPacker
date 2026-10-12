@@ -4,6 +4,8 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>La cámara se usa para escanear los códigos de barras de los bultos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Se usa para leer el código de barras de una foto guardada.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -30,19 +32,13 @@
 	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
-	<key>NSCameraUsageDescription</key>
-	<string>La cámara se usa para escanear los códigos de barras de los bultos.</string>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 		<key>UISceneConfigurations</key>
 		<dict>
-	<key>NSCameraUsageDescription</key>
-	<string>La cámara se usa para escanear los códigos de barras de los bultos.</string>
 			<key>UIWindowSceneSessionRoleApplication</key>
 			<array>
 				<dict>
-	<key>NSCameraUsageDescription</key>
-	<string>La cámara se usa para escanear los códigos de barras de los bultos.</string>
 					<key>UISceneClassName</key>
 					<string>UIWindowScene</string>
 					<key>UISceneConfigurationName</key>

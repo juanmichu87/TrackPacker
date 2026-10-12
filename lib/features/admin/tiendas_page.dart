@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/tema.dart';
+import '../../core/formato.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
 import 'datos/modelos.dart';
@@ -32,7 +34,8 @@ class _TiendasPageState extends ConsumerState<TiendasPage> {
     if (!await confirmar(
       context,
       titulo: 'Eliminar tienda',
-      mensaje: 'Se eliminará "${t.nombre}". Si tiene entregas registradas no se podrá eliminar; '
+      mensaje:
+          'Se eliminará "${t.nombre}". Si tiene entregas registradas no se podrá eliminar; '
           'en ese caso, desactívala.',
       accion: 'Eliminar',
       peligroso: true,
@@ -57,7 +60,7 @@ class _TiendasPageState extends ConsumerState<TiendasPage> {
       children: [
         BarraLista(
           pista: 'Buscar por tienda, dirección o localidad',
-          alBuscar: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+          alBuscar: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
           filtros: [
             DropdownButton<String?>(
               value: _rutaId,
@@ -88,12 +91,16 @@ class _TiendasPageState extends ConsumerState<TiendasPage> {
             alReintentar: () => refrescarRutasYTiendas(ref),
             datos: (tiendas) {
               final filtradas = tiendas.where((t) {
-                if (_rutaId == _sinRuta && t.rutaId != null) return false;
-                if (_rutaId != null && _rutaId != _sinRuta && t.rutaId != _rutaId) return false;
+                if (_rutaId == _sinRuta && t.rutas.isNotEmpty) return false;
+                if (_rutaId != null && _rutaId != _sinRuta && !t.estaEnRuta(_rutaId!)) return false;
                 if (_clienteId != null && t.clienteId != _clienteId) return false;
                 if (_busqueda.isEmpty) return true;
-                return [t.nombre, t.direccion, t.localidad, t.codigoPostal]
-                    .any((c) => c?.toLowerCase().contains(_busqueda) ?? false);
+                return [
+                  t.nombre,
+                  t.direccion,
+                  t.localidad,
+                  t.codigoPostal,
+                ].any((c) => coincideBusqueda(c, _busqueda));
               }).toList();
               if (filtradas.isEmpty) return const ListaVacia('No hay tiendas que mostrar.');
 
@@ -102,29 +109,37 @@ class _TiendasPageState extends ConsumerState<TiendasPage> {
                 separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final t = filtradas[i];
-                  final ruta = t.rutaNombre == null
+                  final ruta = t.rutas.isEmpty
                       ? 'Sin ruta'
-                      : '${t.rutaNombre}${t.ordenEnRuta == null ? '' : ' (#${t.ordenEnRuta})'}';
+                      : t.rutas.map((r) => r.texto).join(', ');
                   return ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.storefront_outlined)),
                     title: Text(t.nombre),
-                    subtitle: Text([?t.clienteNombre, ruta, t.direccionCompleta]
-                        .where((p) => p.isNotEmpty)
-                        .join(' · ')),
+                    subtitle: Text(
+                      [
+                        ?t.clienteNombre,
+                        ruta,
+                        t.direccionCompleta,
+                      ].where((p) => p.isNotEmpty).join(' · '),
+                    ),
                     onTap: () => _editar(t),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (t.rutaId == null && t.activa)
+                        if (t.rutas.isEmpty && t.activa)
                           const Padding(
                             padding: EdgeInsets.only(right: 8),
-                            child: Etiqueta('Sin ruta', color: Colors.orange),
+                            child: Etiqueta('Sin ruta', color: ColoresEstado.aviso),
                           ),
                         EtiquetaActivo(t.activa),
                         MenuFila([
                           OpcionMenu('Editar', Icons.edit_outlined, () => _editar(t)),
-                          OpcionMenu('Eliminar', Icons.delete_outline, () => _eliminar(t),
-                              peligrosa: true),
+                          OpcionMenu(
+                            'Eliminar',
+                            Icons.delete_outline,
+                            () => _eliminar(t),
+                            peligrosa: true,
+                          ),
                         ]),
                       ],
                     ),
@@ -154,7 +169,7 @@ class _TiendaDialogoState extends ConsumerState<_TiendaDialogo> {
   late final _cp = TextEditingController(text: widget.tienda?.codigoPostal);
   late final _localidad = TextEditingController(text: widget.tienda?.localidad);
   late String? _clienteId = widget.tienda?.clienteId;
-  late String? _rutaId = widget.tienda?.rutaId;
+  late final Set<String> _rutas = {for (final r in widget.tienda?.rutas ?? const []) r.id};
   late bool _activa = widget.tienda?.activa ?? true;
 
   @override
@@ -165,32 +180,31 @@ class _TiendaDialogoState extends ConsumerState<_TiendaDialogo> {
     super.dispose();
   }
 
-  /// Si cambia de ruta, la tienda pasa al final del recorrido de la nueva.
-  int? _orden(List<Tienda> tiendas) {
-    if (_rutaId == null) return null;
-    if (_rutaId == widget.tienda?.rutaId) return widget.tienda?.ordenEnRuta;
-    final ordenes = tiendas.where((t) => t.rutaId == _rutaId).map((t) => t.ordenEnRuta ?? 0);
-    return ordenes.fold(0, (a, b) => a > b ? a : b) + 1;
-  }
-
   @override
   Widget build(BuildContext context) {
+    final tema = Theme.of(context);
     final clientes = ref.watch(clientesProvider).value ?? const <Cliente>[];
     final rutas = ref.watch(rutasProvider).value ?? const <Ruta>[];
-    final tiendas = ref.watch(tiendasProvider).value ?? const <Tienda>[];
 
     return DialogoFormulario(
       titulo: widget.tienda == null ? 'Nueva tienda' : 'Editar tienda',
-      alGuardar: () => ref.read(adminRepositoryProvider).guardar('tiendas', widget.tienda?.id, {
-        'nombre': _nombre.text.trim(),
-        'cliente_id': _clienteId,
-        'ruta_id': _rutaId,
-        'orden_en_ruta': _orden(tiendas),
-        'direccion': textoONulo(_direccion.text),
-        'codigo_postal': textoONulo(_cp.text),
-        'localidad': textoONulo(_localidad.text),
-        'activa': _activa,
-      }),
+      alGuardar: () => ref
+          .read(adminRepositoryProvider)
+          .guardarTienda(
+            widget.tienda?.id,
+            {
+              'nombre': _nombre.text.trim(),
+              'cliente_id': _clienteId,
+              'direccion': textoONulo(_direccion.text),
+              'codigo_postal': textoONulo(_cp.text),
+              'localidad': textoONulo(_localidad.text),
+              'activa': _activa,
+            },
+            rutaIds: [
+              for (final r in rutas)
+                if (_rutas.contains(r.id)) r.id,
+            ],
+          ),
       exito: widget.tienda == null ? 'Tienda creada' : 'Tienda actualizada',
       campos: [
         TextFormField(
@@ -202,23 +216,34 @@ class _TiendaDialogoState extends ConsumerState<_TiendaDialogo> {
         DropdownButtonFormField<String>(
           initialValue: _clienteId,
           decoration: const InputDecoration(labelText: 'Cliente'),
-          items: [
-            for (final c in clientes) DropdownMenuItem(value: c.id, child: Text(c.nombre)),
-          ],
+          items: [for (final c in clientes) DropdownMenuItem(value: c.id, child: Text(c.nombre))],
           onChanged: (v) => setState(() => _clienteId = v),
           validator: (v) => v == null ? 'Elige el cliente' : null,
         ),
-        DropdownButtonFormField<String?>(
-          initialValue: _rutaId,
-          decoration: const InputDecoration(
-            labelText: 'Ruta',
-            helperText: 'El orden dentro de la ruta se ajusta desde la página de la ruta',
-          ),
-          items: [
-            const DropdownMenuItem(value: null, child: Text('Sin ruta')),
-            for (final r in rutas) DropdownMenuItem(value: r.id, child: Text(r.nombre)),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Rutas', style: tema.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Puede estar en varias. En una ruta nueva se coloca al final; el orden '
+              'se ajusta desde la página de la ruta.',
+              style: tema.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final r in rutas)
+                  FilterChip(
+                    label: Text(r.nombre),
+                    selected: _rutas.contains(r.id),
+                    onSelected: (s) => setState(() => s ? _rutas.add(r.id) : _rutas.remove(r.id)),
+                  ),
+              ],
+            ),
           ],
-          onChanged: (v) => setState(() => _rutaId = v),
         ),
         TextFormField(
           controller: _direccion,

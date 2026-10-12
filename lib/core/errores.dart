@@ -28,8 +28,8 @@ String mensajeError(Object error) {
       }
     }
     switch (error.code) {
-      // Tabla, vista o función que no existe: falta aplicar una migración
-      case 'PGRST202' || 'PGRST205' || '42P01' || '42883':
+      // Tabla, columna, relación o función que no existe: falta aplicar una migración
+      case 'PGRST200' || 'PGRST202' || 'PGRST204' || 'PGRST205' || '42P01' || '42703' || '42883':
         return 'La base de datos no está actualizada: falta ejecutar la última migración '
             'de supabase/migrations en el SQL Editor de Supabase.';
       // Errores lanzados por nuestras funciones: el mensaje ya está en español

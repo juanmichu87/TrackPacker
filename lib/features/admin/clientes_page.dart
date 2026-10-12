@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/codigos.dart';
 import '../../core/errores.dart';
 import '../../core/formato.dart';
+import '../../core/tema.dart';
 import '../../shared/escaner.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
@@ -37,7 +38,8 @@ class _ClientesPageState extends ConsumerState<ClientesPage> {
     if (!await confirmar(
       context,
       titulo: 'Eliminar cliente',
-      mensaje: 'Se eliminará "${c.nombre}". Si tiene tiendas o usuarios asociados no se podrá '
+      mensaje:
+          'Se eliminará "${c.nombre}". Si tiene tiendas o usuarios asociados no se podrá '
           'eliminar; en ese caso, desactívalo.',
       accion: 'Eliminar',
       peligroso: true,
@@ -61,7 +63,7 @@ class _ClientesPageState extends ConsumerState<ClientesPage> {
       children: [
         BarraLista(
           pista: 'Buscar por nombre o CIF',
-          alBuscar: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+          alBuscar: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
           textoNuevo: 'Nuevo cliente',
           alNuevo: () => _editar(),
         ),
@@ -71,9 +73,12 @@ class _ClientesPageState extends ConsumerState<ClientesPage> {
             alReintentar: _refrescar,
             datos: (clientes) {
               final filtrados = clientes
-                  .where((c) => _busqueda.isEmpty ||
-                      c.nombre.toLowerCase().contains(_busqueda) ||
-                      (c.cif?.toLowerCase().contains(_busqueda) ?? false))
+                  .where(
+                    (c) =>
+                        _busqueda.isEmpty ||
+                        coincideBusqueda(c.nombre, _busqueda) ||
+                        coincideBusqueda(c.cif, _busqueda),
+                  )
                   .toList();
               if (filtrados.isEmpty) return const ListaVacia('No hay clientes que mostrar.');
 
@@ -87,11 +92,13 @@ class _ClientesPageState extends ConsumerState<ClientesPage> {
                   return ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.business_outlined)),
                     title: Text(c.nombre),
-                    subtitle: Text([
-                      ?c.cif,
-                      '$numTiendas ${numTiendas == 1 ? 'tienda' : 'tiendas'}',
-                      'Códigos: $formatos',
-                    ].join(' · ')),
+                    subtitle: Text(
+                      [
+                        ?c.cif,
+                        '$numTiendas ${numTiendas == 1 ? 'tienda' : 'tiendas'}',
+                        'Códigos: $formatos',
+                      ].join(' · '),
+                    ),
                     onTap: () => _editar(c),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -99,8 +106,12 @@ class _ClientesPageState extends ConsumerState<ClientesPage> {
                         EtiquetaActivo(c.activo),
                         MenuFila([
                           OpcionMenu('Editar', Icons.edit_outlined, () => _editar(c)),
-                          OpcionMenu('Eliminar', Icons.delete_outline, () => _eliminar(c),
-                              peligrosa: true),
+                          OpcionMenu(
+                            'Eliminar',
+                            Icons.delete_outline,
+                            () => _eliminar(c),
+                            peligrosa: true,
+                          ),
                         ]),
                       ],
                     ),
@@ -130,7 +141,9 @@ class _ClienteDialogoState extends ConsumerState<_ClienteDialogo> {
   late final _patron = TextEditingController(text: widget.cliente?.patronExtraccion);
   late final _min = TextEditingController(text: widget.cliente?.longitudMin?.toString());
   late final _max = TextEditingController(text: widget.cliente?.longitudMax?.toString());
-  late final Set<String> _formatos = {...(widget.cliente?.formatos ?? const ['code128'])};
+  late final Set<String> _formatos = {
+    ...(widget.cliente?.formatos ?? const ['code128']),
+  };
   late bool _activo = widget.cliente?.activo ?? true;
 
   /// Última etiqueta de ejemplo leída, para comprobar la configuración.
@@ -253,7 +266,8 @@ class _ClienteDialogoState extends ConsumerState<_ClienteDialogo> {
                   FilterChip(
                     label: Text(value),
                     selected: _formatos.contains(key),
-                    onSelected: (s) => setState(() => s ? _formatos.add(key) : _formatos.remove(key)),
+                    onSelected: (s) =>
+                        setState(() => s ? _formatos.add(key) : _formatos.remove(key)),
                   ),
               ],
             ),
@@ -345,7 +359,7 @@ class _PruebaEtiqueta extends StatelessWidget {
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
     final (icono, color, texto) = switch (resultado) {
-      IdValido(:final id) => (Icons.check_circle, Colors.green, 'ID del bulto: $id'),
+      IdValido(:final id) => (Icons.check_circle, ColoresEstado.correcto, 'ID del bulto: $id'),
       IdInvalido(:final motivo) => (Icons.error, tema.colorScheme.error, motivo),
     };
     return Column(
@@ -361,7 +375,9 @@ class _PruebaEtiqueta extends StatelessWidget {
           children: [
             Icon(icono, color: color, size: 18),
             const SizedBox(width: 6),
-            Expanded(child: Text(texto, style: TextStyle(color: color))),
+            Expanded(
+              child: Text(texto, style: TextStyle(color: color)),
+            ),
           ],
         ),
       ],

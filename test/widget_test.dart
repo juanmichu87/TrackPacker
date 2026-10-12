@@ -32,23 +32,44 @@ void main() {
   });
 
   group('redireccion', () {
+    String? ir(EstadoSesion sesion, String url) => redireccion(sesion, Uri.parse(url));
+    final admin = SesionIniciada(_perfil({Permisos.usuariosGestionar}));
+
     test('sin sesión siempre va al login', () {
-      expect(redireccion(const SinSesion(), '/admin'), '/login');
-      expect(redireccion(const SinSesion(), '/login'), isNull);
+      expect(ir(const SinSesion(), '/'), '/login');
+      expect(ir(const SinSesion(), '/login'), isNull);
     });
 
     test('mientras carga espera en la pantalla de inicio', () {
-      expect(redireccion(const SesionCargando(), '/login'), '/');
-      expect(redireccion(const ErrorSesion('x'), '/'), isNull);
+      expect(ir(const SesionCargando(), '/login'), '/');
+      expect(ir(const ErrorSesion('x'), '/'), isNull);
+    });
+
+    test('al recargar una página interna vuelve a ella tras cargar el perfil', () {
+      final espera = ir(const SesionCargando(), '/admin/rutas/abc')!;
+      expect(Uri.parse(espera).path, '/');
+      expect(ir(const SesionCargando(), espera), isNull);
+      expect(ir(admin, espera), '/admin/rutas/abc');
+    });
+
+    test('sin sesión recuerda la página para después del login', () {
+      final login = ir(const SinSesion(), '/admin/tiendas')!;
+      expect(Uri.parse(login).path, '/login');
+      expect(ir(admin, login), '/admin/tiendas');
+    });
+
+    test('no deja volver a una página de otra zona', () {
+      final repartidor = SesionIniciada(_perfil({Permisos.repartosOperar}));
+      expect(ir(repartidor, '/login?desde=%2Fadmin%2Fusuarios'), '/repartidor');
     });
 
     test('cada usuario queda confinado en su zona', () {
       final repartidor = SesionIniciada(_perfil({Permisos.repartosOperar}));
-      expect(redireccion(repartidor, '/login'), '/repartidor');
-      expect(redireccion(repartidor, '/admin'), '/repartidor');
-      expect(redireccion(repartidor, '/repartidor'), isNull);
-      expect(redireccion(repartidor, '/repartidor/carga'), isNull);
-      expect(redireccion(repartidor, '/repartidorx'), '/repartidor');
+      expect(ir(repartidor, '/login'), '/repartidor');
+      expect(ir(repartidor, '/admin'), '/repartidor');
+      expect(ir(repartidor, '/repartidor'), isNull);
+      expect(ir(repartidor, '/repartidor/carga'), isNull);
+      expect(ir(repartidor, '/repartidorx'), '/repartidor');
     });
   });
 

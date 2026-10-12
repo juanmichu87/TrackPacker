@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/formato.dart';
 import '../../shared/ui.dart';
 import '../auth/sesion.dart';
 import 'datos/admin_repository.dart';
@@ -31,7 +32,10 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
   }
 
   Future<void> _cambiarContrasena(UsuarioAdmin usuario) async {
-    await showDialog<bool>(context: context, builder: (_) => _ContrasenaDialogo(usuario: usuario));
+    await showDialog<bool>(
+      context: context,
+      builder: (_) => _ContrasenaDialogo(usuario: usuario),
+    );
   }
 
   Future<void> _cambiarActivo(UsuarioAdmin u) async {
@@ -40,7 +44,8 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
         !await confirmar(
           context,
           titulo: 'Desactivar usuario',
-          mensaje: '${u.nombreVisible} no podrá iniciar sesión y se cerrarán sus sesiones abiertas. '
+          mensaje:
+              '${u.nombreVisible} no podrá iniciar sesión y se cerrarán sus sesiones abiertas. '
               'Su historial se conserva y puedes reactivarlo cuando quieras.',
           accion: 'Desactivar',
           peligroso: true,
@@ -50,16 +55,18 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
     if (!mounted) return;
     final ok = await ejecutar(
       context,
-      () => ref.read(adminRepositoryProvider).actualizarUsuario(
-        id: u.id,
-        usuario: u.usuario,
-        rol: u.rol,
-        activo: activar,
-        nombreCompleto: u.nombreCompleto,
-        email: u.email,
-        telefono: u.telefono,
-        clienteId: u.clienteId,
-      ),
+      () => ref
+          .read(adminRepositoryProvider)
+          .actualizarUsuario(
+            id: u.id,
+            usuario: u.usuario,
+            rol: u.rol,
+            activo: activar,
+            nombreCompleto: u.nombreCompleto,
+            email: u.email,
+            telefono: u.telefono,
+            clienteId: u.clienteId,
+          ),
       exito: activar ? 'Usuario activado' : 'Usuario desactivado',
     );
     if (ok) _refrescar();
@@ -69,7 +76,8 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
     if (!await confirmar(
       context,
       titulo: 'Eliminar usuario',
-      mensaje: 'Se eliminará "${u.usuario}" definitivamente. Si tiene repartos o incidencias '
+      mensaje:
+          'Se eliminará "${u.usuario}" definitivamente. Si tiene repartos o incidencias '
           'registrados no se podrá eliminar; en ese caso, desactívalo.',
       accion: 'Eliminar',
       peligroso: true,
@@ -96,7 +104,7 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
       children: [
         BarraLista(
           pista: 'Buscar por usuario, nombre o email',
-          alBuscar: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+          alBuscar: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
           filtros: [
             DropdownButton<String?>(
               value: _rol,
@@ -119,8 +127,12 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
               final filtrados = usuarios.where((u) {
                 if (_rol != null && u.rol != _rol) return false;
                 if (_busqueda.isEmpty) return true;
-                return [u.usuario, u.nombreCompleto, u.email, u.clienteNombre]
-                    .any((c) => c?.toLowerCase().contains(_busqueda) ?? false);
+                return [
+                  u.usuario,
+                  u.nombreCompleto,
+                  u.email,
+                  u.clienteNombre,
+                ].any((c) => coincideBusqueda(c, _busqueda));
               }).toList();
               if (filtrados.isEmpty) return const ListaVacia('No hay usuarios que mostrar.');
 
@@ -148,7 +160,11 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
                         EtiquetaActivo(u.activo),
                         MenuFila([
                           OpcionMenu('Editar', Icons.edit_outlined, () => _editar(u)),
-                          OpcionMenu('Cambiar contraseña', Icons.password, () => _cambiarContrasena(u)),
+                          OpcionMenu(
+                            'Cambiar contraseña',
+                            Icons.password,
+                            () => _cambiarContrasena(u),
+                          ),
                           if (!esYo)
                             OpcionMenu(
                               u.activo ? 'Desactivar' : 'Activar',
@@ -156,8 +172,12 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
                               () => _cambiarActivo(u),
                             ),
                           if (!esYo)
-                            OpcionMenu('Eliminar', Icons.delete_outline, () => _eliminar(u),
-                                peligrosa: true),
+                            OpcionMenu(
+                              'Eliminar',
+                              Icons.delete_outline,
+                              () => _eliminar(u),
+                              peligrosa: true,
+                            ),
                         ]),
                       ],
                     ),
@@ -212,25 +232,25 @@ class _UsuarioDialogoState extends ConsumerState<_UsuarioDialogo> {
     final repo = ref.read(adminRepositoryProvider);
     final clienteId = _rol == 'cliente' ? _clienteId : null;
     return _esNuevo
-          ? repo.crearUsuario(
-              usuario: _usuario.text,
-              contrasena: _contrasena.text,
-              rol: _rol!,
-              nombreCompleto: textoONulo(_nombre.text),
-              email: textoONulo(_email.text),
-              telefono: textoONulo(_telefono.text),
-              clienteId: clienteId,
-            )
-          : repo.actualizarUsuario(
-              id: widget.usuario!.id,
-              usuario: _usuario.text,
-              rol: _rol!,
-              activo: _activo,
-              nombreCompleto: textoONulo(_nombre.text),
-              email: textoONulo(_email.text),
-              telefono: textoONulo(_telefono.text),
-              clienteId: clienteId,
-            );
+        ? repo.crearUsuario(
+            usuario: _usuario.text,
+            contrasena: _contrasena.text,
+            rol: _rol!,
+            nombreCompleto: textoONulo(_nombre.text),
+            email: textoONulo(_email.text),
+            telefono: textoONulo(_telefono.text),
+            clienteId: clienteId,
+          )
+        : repo.actualizarUsuario(
+            id: widget.usuario!.id,
+            usuario: _usuario.text,
+            rol: _rol!,
+            activo: _activo,
+            nombreCompleto: textoONulo(_nombre.text),
+            email: textoONulo(_email.text),
+            telefono: textoONulo(_telefono.text),
+            clienteId: clienteId,
+          );
   }
 
   @override
@@ -271,9 +291,7 @@ class _UsuarioDialogoState extends ConsumerState<_UsuarioDialogo> {
         DropdownButtonFormField<String>(
           initialValue: _rol,
           decoration: const InputDecoration(labelText: 'Rol'),
-          items: [
-            for (final r in roles) DropdownMenuItem(value: r.codigo, child: Text(r.nombre)),
-          ],
+          items: [for (final r in roles) DropdownMenuItem(value: r.codigo, child: Text(r.nombre))],
           onChanged: (v) => setState(() => _rol = v),
           validator: (v) => v == null ? 'Elige un rol' : null,
         ),
@@ -281,9 +299,7 @@ class _UsuarioDialogoState extends ConsumerState<_UsuarioDialogo> {
           DropdownButtonFormField<String>(
             initialValue: _clienteId,
             decoration: const InputDecoration(labelText: 'Empresa cliente'),
-            items: [
-              for (final c in clientes) DropdownMenuItem(value: c.id, child: Text(c.nombre)),
-            ],
+            items: [for (final c in clientes) DropdownMenuItem(value: c.id, child: Text(c.nombre))],
             onChanged: (v) => setState(() => _clienteId = v),
             validator: (v) => v == null ? 'Elige la empresa' : null,
           ),

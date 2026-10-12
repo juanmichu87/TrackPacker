@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/errores.dart';
+import '../../core/formato.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
 import 'datos/modelos.dart';
 import 'rutas_page.dart';
+import 'salidas_ruta.dart';
 
 /// Tiendas de una ruta: añadir, quitar y ordenar (el orden es el del reparto).
 class RutaDetallePage extends ConsumerStatefulWidget {
@@ -48,9 +50,9 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
     });
     final ok = await ejecutar(
       context,
-      () => ref
-          .read(adminRepositoryProvider)
-          .ordenarTiendas(widget.rutaId, [for (final t in nuevas) t.id]),
+      () => ref.read(adminRepositoryProvider).ordenarTiendas(widget.rutaId, [
+        for (final t in nuevas) t.id,
+      ]),
       exito: exito,
     );
     if (!mounted) return;
@@ -59,6 +61,8 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
       _guardando = false;
     });
     refrescarRutasYTiendas(ref);
+    // Las tiendas quitadas de la ruta salen también de sus salidas
+    ref.invalidate(salidasDeRutaProvider(widget.rutaId));
   }
 
   void _reordenar(int desde, int hasta) {
@@ -74,17 +78,19 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
       builder: (_) => _SelectorTiendas(excluir: actuales),
     );
     if (seleccion == null || seleccion.isEmpty) return;
-    await _aplicar(
-      [...?_tiendas, ...seleccion],
-      exito: seleccion.length == 1 ? 'Tienda añadida' : '${seleccion.length} tiendas añadidas',
-    );
+    await _aplicar([
+      ...?_tiendas,
+      ...seleccion,
+    ], exito: seleccion.length == 1 ? 'Tienda añadida' : '${seleccion.length} tiendas añadidas');
   }
 
   Future<void> _quitar(Tienda t) async {
     if (!await confirmar(
       context,
       titulo: 'Quitar tienda',
-      mensaje: '"${t.nombre}" quedará sin ruta asignada.',
+      mensaje:
+          '"${t.nombre}" se quitará de esta ruta y de sus salidas. '
+          'Si está en otras rutas, sigue en ellas.',
       accion: 'Quitar',
     )) {
       return;
@@ -93,7 +99,10 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
   }
 
   Future<void> _editarRuta(Ruta ruta) async {
-    final guardado = await showDialog<bool>(context: context, builder: (_) => RutaDialogo(ruta: ruta));
+    final guardado = await showDialog<bool>(
+      context: context,
+      builder: (_) => RutaDialogo(ruta: ruta),
+    );
     if (guardado == true) refrescarRutasYTiendas(ref);
   }
 
@@ -104,48 +113,33 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
     final ruta = rutas?.where((r) => r.id == widget.rutaId).firstOrNull;
     final tiendas = _tiendas;
 
-    return Column(
+    final pestanaTiendas = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 12, 16, 4),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Wrap(
             spacing: 12,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              IconButton(
-                tooltip: 'Volver a rutas',
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.go('/admin/rutas'),
-              ),
-              Text(ruta?.nombre ?? 'Ruta', style: tema.textTheme.titleLarge),
-              if (ruta?.areaNombre != null) Chip(label: Text(ruta!.areaNombre!)),
-              if (ruta != null) EtiquetaActivo(ruta.activa),
-              if (ruta != null)
-                OutlinedButton.icon(
-                  onPressed: () => _editarRuta(ruta),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Editar ruta'),
-                ),
               FilledButton.icon(
                 onPressed: _guardando || tiendas == null ? null : _anadir,
                 icon: const Icon(Icons.add_business_outlined),
                 label: const Text('Añadir tiendas'),
               ),
               if (_guardando)
-                const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              Text(
+                'Arrastra las tiendas para ordenarlas según el recorrido del reparto.',
+                style: tema.textTheme.bodySmall,
+              ),
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'Arrastra las tiendas para ordenarlas según el recorrido del reparto.',
-            style: tema.textTheme.bodySmall,
-          ),
-        ),
-        const SizedBox(height: 8),
         Expanded(
           child: switch ((tiendas, _error)) {
             (_, final Object e) => Center(
@@ -159,8 +153,9 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
               ),
             ),
             (null, _) => const Center(child: CircularProgressIndicator()),
-            (final List<Tienda> lista, _) when lista.isEmpty =>
-              const ListaVacia('Esta ruta aún no tiene tiendas. Pulsa «Añadir tiendas».'),
+            (final List<Tienda> lista, _) when lista.isEmpty => const ListaVacia(
+              'Esta ruta aún no tiene tiendas. Pulsa «Añadir tiendas».',
+            ),
             (final List<Tienda> lista, _) => ReorderableListView.builder(
               buildDefaultDragHandles: false,
               itemCount: lista.length,
@@ -181,9 +176,9 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
                     ],
                   ),
                   title: Text(t.nombre),
-                  subtitle: Text([?t.clienteNombre, t.direccionCompleta]
-                      .where((p) => p.isNotEmpty)
-                      .join(' · ')),
+                  subtitle: Text(
+                    [?t.clienteNombre, t.direccionCompleta].where((p) => p.isNotEmpty).join(' · '),
+                  ),
                   trailing: IconButton(
                     tooltip: 'Quitar de la ruta',
                     icon: const Icon(Icons.remove_circle_outline),
@@ -195,6 +190,53 @@ class _RutaDetallePageState extends ConsumerState<RutaDetallePage> {
           },
         ),
       ],
+    );
+
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 16, 0),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'Volver a rutas',
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => context.go('/admin/rutas'),
+                ),
+                Text(ruta?.nombre ?? 'Ruta', style: tema.textTheme.titleLarge),
+                if (ruta?.areaNombre != null) Chip(label: Text(ruta!.areaNombre!)),
+                if (ruta != null) EtiquetaActivo(ruta.activa),
+                if (ruta != null)
+                  OutlinedButton.icon(
+                    onPressed: () => _editarRuta(ruta),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Editar ruta'),
+                  ),
+              ],
+            ),
+          ),
+          const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.format_list_numbered), text: 'Tiendas y orden'),
+              Tab(icon: Icon(Icons.schedule), text: 'Salidas'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                pestanaTiendas,
+                SalidasRuta(rutaId: widget.rutaId, tiendas: tiendas ?? const []),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -212,7 +254,7 @@ class _SelectorTiendas extends ConsumerStatefulWidget {
 class _SelectorTiendasState extends ConsumerState<_SelectorTiendas> {
   final _seleccion = <String>{};
   String _busqueda = '';
-  bool _soloSinRuta = true;
+  bool _soloSinRuta = false;
 
   @override
   Widget build(BuildContext context) {
@@ -231,13 +273,13 @@ class _SelectorTiendasState extends ConsumerState<_SelectorTiendas> {
                 prefixIcon: Icon(Icons.search),
                 isDense: true,
               ),
-              onChanged: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+              onChanged: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
             ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Solo tiendas sin ruta'),
               value: _soloSinRuta,
-              onChanged: (v) => setState(() => _soloSinRuta = v ?? true),
+              onChanged: (v) => setState(() => _soloSinRuta = v ?? false),
             ),
             Expanded(
               child: VistaAsync(
@@ -246,10 +288,13 @@ class _SelectorTiendasState extends ConsumerState<_SelectorTiendas> {
                 datos: (tiendas) {
                   final candidatas = tiendas.where((t) {
                     if (!t.activa || widget.excluir.contains(t.id)) return false;
-                    if (_soloSinRuta && t.rutaId != null) return false;
+                    if (_soloSinRuta && t.rutas.isNotEmpty) return false;
                     if (_busqueda.isEmpty) return true;
-                    return [t.nombre, t.clienteNombre, t.localidad]
-                        .any((c) => c?.toLowerCase().contains(_busqueda) ?? false);
+                    return [
+                      t.nombre,
+                      t.clienteNombre,
+                      t.localidad,
+                    ].any((c) => coincideBusqueda(c, _busqueda));
                   }).toList();
                   if (candidatas.isEmpty) {
                     return const ListaVacia('No hay tiendas disponibles con este filtro.');
@@ -263,10 +308,13 @@ class _SelectorTiendasState extends ConsumerState<_SelectorTiendas> {
                             () => s == true ? _seleccion.add(t.id) : _seleccion.remove(t.id),
                           ),
                           title: Text(t.nombre),
-                          subtitle: Text([
-                            ?t.clienteNombre,
-                            if (t.rutaNombre != null) 'Se moverá desde ${t.rutaNombre}',
-                          ].join(' · ')),
+                          subtitle: Text(
+                            [
+                              ?t.clienteNombre,
+                              if (t.rutas.isNotEmpty)
+                                'También en ${t.rutas.map((r) => r.nombre).join(', ')}',
+                            ].join(' · '),
+                          ),
                         ),
                     ],
                   );

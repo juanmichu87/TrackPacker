@@ -50,15 +50,17 @@ class _FormularioAjustesState extends ConsumerState<_FormularioAjustes> {
     final fotos = int.parse(_fotos.text.trim());
     final bultos = int.parse(_bultos.text.trim());
     if (fotos > bultos) {
-      mostrarMensaje(context, 'Las fotos no pueden guardarse más días que los bultos.', error: true);
+      mostrarMensaje(
+        context,
+        'Las fotos no pueden guardarse más días que los bultos.',
+        error: true,
+      );
       return;
     }
     setState(() => _guardando = true);
     final ok = await ejecutar(
       context,
-      () => ref
-          .read(adminRepositoryProvider)
-          .guardarAjustes(diasFotos: fotos, diasBultos: bultos),
+      () => ref.read(adminRepositoryProvider).guardarAjustes(diasFotos: fotos, diasBultos: bultos),
       exito: 'Ajustes guardados',
     );
     if (!mounted) return;
@@ -108,10 +110,7 @@ class _FormularioAjustesState extends ConsumerState<_FormularioAjustes> {
                   validator: _rango(1, 365),
                 ),
                 const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _guardando ? null : _guardar,
-                  child: const Text('Guardar'),
-                ),
+                FilledButton(onPressed: _guardando ? null : _guardar, child: const Text('Guardar')),
               ],
             ),
           ),

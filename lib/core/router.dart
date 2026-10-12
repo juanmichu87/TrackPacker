@@ -32,8 +32,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Rutas.inicio,
     refreshListenable: sesion,
-    redirect: (context, estado) =>
-        redireccion(sesion.value, estado.matchedLocation),
+    redirect: (context, estado) => redireccion(sesion.value, estado.uri),
     routes: [
       GoRoute(path: Rutas.inicio, builder: (_, _) => const InicioPage()),
       GoRoute(path: Rutas.login, builder: (_, _) => const LoginPage()),
@@ -73,16 +72,33 @@ GoRoute _pagina(String ruta, Widget Function(GoRouterState estado) pagina) => Go
 );
 
 /// Cada usuario solo puede estar en la zona que le dan sus permisos.
+///
+/// Mientras se carga el perfil (o en el login) se recuerda en `?desde=` la
+/// página pedida, para volver a ella después: así recargar el navegador en
+/// /admin/rutas no te devuelve al resumen.
 @visibleForTesting
-String? redireccion(EstadoSesion sesion, String ubicacion) {
+String? redireccion(EstadoSesion sesion, Uri uri) {
+  final ubicacion = uri.path;
+  final destino = uri.queryParameters['desde'];
+
+  String conDestino(String base) {
+    final pendiente = destino ??
+        (ubicacion == Rutas.inicio || ubicacion == Rutas.login ? null : uri.toString());
+    return pendiente == null
+        ? base
+        : Uri(path: base, queryParameters: {'desde': pendiente}).toString();
+  }
+
   switch (sesion) {
     case SesionCargando() || ErrorSesion():
-      return ubicacion == Rutas.inicio ? null : Rutas.inicio;
+      return ubicacion == Rutas.inicio ? null : conDestino(Rutas.inicio);
     case SinSesion():
-      return ubicacion == Rutas.login ? null : Rutas.login;
+      return ubicacion == Rutas.login ? null : conDestino(Rutas.login);
     case SesionIniciada(:final perfil):
       final ruta = perfil.area!.ruta;
-      final dentro = ubicacion == ruta || ubicacion.startsWith('$ruta/');
-      return dentro ? null : ruta;
+      bool dentro(String camino) => camino == ruta || camino.startsWith('$ruta/');
+      if (dentro(ubicacion)) return null;
+      if (destino != null && dentro(Uri.parse(destino).path)) return destino;
+      return ruta;
   }
 }

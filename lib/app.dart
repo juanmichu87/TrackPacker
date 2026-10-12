@@ -3,13 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router.dart';
-
-const _colorMarca = Color(0xFF0B6E4F);
-
-ThemeData _tema(Brightness brillo) => ThemeData(
-  colorScheme: ColorScheme.fromSeed(seedColor: _colorMarca, brightness: brillo),
-  inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
-);
+import 'core/tema.dart';
 
 class TrackPackApp extends ConsumerWidget {
   const TrackPackApp({super.key});
@@ -19,8 +13,9 @@ class TrackPackApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'TrackPack',
       debugShowCheckedModeBanner: false,
-      theme: _tema(Brightness.light),
-      darkTheme: _tema(Brightness.dark),
+      // Siempre en claro: es lo que mejor se lee a pleno sol
+      theme: temaTrackPack(),
+      themeMode: ThemeMode.light,
       locale: const Locale('es', 'ES'),
       supportedLocales: const [Locale('es', 'ES')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -37,7 +32,7 @@ class ConfigFaltanteApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: _tema(Brightness.light),
+      theme: temaTrackPack(),
       home: const Scaffold(
         body: Center(
           child: Padding(

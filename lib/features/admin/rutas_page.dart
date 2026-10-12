@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/formato.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
 import 'datos/modelos.dart';
@@ -29,7 +30,9 @@ class _RutasPageState extends ConsumerState<RutasPage> {
     if (!await confirmar(
       context,
       titulo: 'Eliminar ruta',
-      mensaje: 'Se eliminará "${r.nombre}" y sus ${r.numTiendas} tiendas quedarán sin ruta. '
+      mensaje:
+          'Se eliminará "${r.nombre}" con sus salidas. Sus ${r.numTiendas} tiendas no se '
+          'borran (siguen en sus otras rutas, si tienen). '
           'Si ya tiene repartos registrados no se podrá eliminar; en ese caso, desactívala.',
       accion: 'Eliminar',
       peligroso: true,
@@ -53,7 +56,7 @@ class _RutasPageState extends ConsumerState<RutasPage> {
       children: [
         BarraLista(
           pista: 'Buscar ruta',
-          alBuscar: (v) => setState(() => _busqueda = v.trim().toLowerCase()),
+          alBuscar: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
           filtros: [
             if (areas.isNotEmpty)
               DropdownButton<String?>(
@@ -75,8 +78,11 @@ class _RutasPageState extends ConsumerState<RutasPage> {
             alReintentar: () => refrescarRutasYTiendas(ref),
             datos: (rutas) {
               final filtradas = rutas
-                  .where((r) => (_areaId == null || r.areaId == _areaId) &&
-                      r.nombre.toLowerCase().contains(_busqueda))
+                  .where(
+                    (r) =>
+                        (_areaId == null || r.areaId == _areaId) &&
+                        coincideBusqueda(r.nombre, _busqueda),
+                  )
                   .toList();
               if (filtradas.isEmpty) return const ListaVacia('No hay rutas que mostrar.');
 
@@ -88,21 +94,30 @@ class _RutasPageState extends ConsumerState<RutasPage> {
                   return ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.alt_route)),
                     title: Text(r.nombre),
-                    subtitle: Text([
-                      ?r.areaNombre,
-                      '${r.numTiendas} ${r.numTiendas == 1 ? 'tienda' : 'tiendas'}',
-                    ].join(' · ')),
+                    subtitle: Text(
+                      [
+                        ?r.areaNombre,
+                        '${r.numTiendas} ${r.numTiendas == 1 ? 'tienda' : 'tiendas'}',
+                      ].join(' · '),
+                    ),
                     onTap: () => context.go('/admin/rutas/${r.id}'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         EtiquetaActivo(r.activa),
                         MenuFila([
-                          OpcionMenu('Tiendas y orden', Icons.format_list_numbered,
-                              () => context.go('/admin/rutas/${r.id}')),
+                          OpcionMenu(
+                            'Tiendas y orden',
+                            Icons.format_list_numbered,
+                            () => context.go('/admin/rutas/${r.id}'),
+                          ),
                           OpcionMenu('Editar', Icons.edit_outlined, () => _editar(r)),
-                          OpcionMenu('Eliminar', Icons.delete_outline, () => _eliminar(r),
-                              peligrosa: true),
+                          OpcionMenu(
+                            'Eliminar',
+                            Icons.delete_outline,
+                            () => _eliminar(r),
+                            peligrosa: true,
+                          ),
                         ]),
                       ],
                     ),

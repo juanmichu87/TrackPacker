@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/errores.dart';
+import '../core/tema.dart';
+
+/// Pantalla estrecha (móvil en vertical).
+bool esMovil(BuildContext context) => MediaQuery.sizeOf(context).width < 600;
 
 /// Muestra carga, error (con reintentar) o los datos de un AsyncValue.
 class VistaAsync<T> extends StatelessWidget {
@@ -153,46 +157,65 @@ class _DialogoFormularioState extends State<DialogoFormulario> {
   @override
   Widget build(BuildContext context) {
     final colores = Theme.of(context).colorScheme;
+    final formulario = Form(
+      key: _formulario,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final campo in widget.campos)
+            Padding(padding: const EdgeInsets.only(bottom: 16), child: campo),
+          if (_error != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colores.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(_error!, style: TextStyle(color: colores.onErrorContainer)),
+            ),
+        ],
+      ),
+    );
+    final botonGuardar = FilledButton(
+      onPressed: _guardando ? null : _guardar,
+      child: _guardando
+          ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+          : Text(widget.textoGuardar),
+    );
+
+    // En el móvil, a pantalla completa: más sitio y el teclado no tapa los campos
+    if (esMovil(context)) {
+      return Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              tooltip: 'Cancelar',
+              icon: const Icon(Icons.close),
+              onPressed: _guardando ? null : () => Navigator.pop(context, false),
+            ),
+            title: Text(widget.titulo),
+            actions: [Padding(padding: const EdgeInsets.only(right: 12), child: botonGuardar)],
+          ),
+          body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: formulario),
+        ),
+      );
+    }
+
     return AlertDialog(
       title: Text(widget.titulo),
       scrollable: true,
-      content: SizedBox(
-        width: 480,
-        child: Form(
-          key: _formulario,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final campo in widget.campos)
-                Padding(padding: const EdgeInsets.only(bottom: 16), child: campo),
-              if (_error != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colores.errorContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(_error!, style: TextStyle(color: colores.onErrorContainer)),
-                ),
-            ],
-          ),
-        ),
-      ),
+      content: SizedBox(width: 480, child: formulario),
       actions: [
         TextButton(
           onPressed: _guardando ? null : () => Navigator.pop(context, false),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: _guardando ? null : _guardar,
-          child: _guardando
-              ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(widget.textoGuardar),
-        ),
+        botonGuardar,
       ],
     );
   }
+
 }
 
 /// Validador de campo obligatorio.
@@ -221,6 +244,52 @@ class BarraLista extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final buscador = TextField(
+      decoration: InputDecoration(
+        hintText: pista,
+        prefixIcon: const Icon(Icons.search),
+        isDense: true,
+      ),
+      onChanged: alBuscar,
+    );
+
+    // Móvil: buscador a todo el ancho con el botón de alta al lado y los
+    // filtros debajo, desplazables en horizontal.
+    if (esMovil(context)) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: buscador),
+                if (alNuevo != null) ...[
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    tooltip: textoNuevo ?? 'Nuevo',
+                    onPressed: alNuevo,
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ],
+            ),
+            if (filtros.isNotEmpty)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    for (final f in filtros)
+                      Padding(padding: const EdgeInsets.only(right: 12), child: f),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Wrap(
@@ -228,17 +297,7 @@ class BarraLista extends StatelessWidget {
         runSpacing: 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          SizedBox(
-            width: 320,
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: pista,
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
-              ),
-              onChanged: alBuscar,
-            ),
-          ),
+          SizedBox(width: 320, child: buscador),
           ...filtros,
           if (alNuevo != null)
             FilledButton.icon(
@@ -250,6 +309,7 @@ class BarraLista extends StatelessWidget {
       ),
     );
   }
+
 }
 
 /// Mensaje centrado para listas vacías.
@@ -291,10 +351,14 @@ class EtiquetaActivo extends StatelessWidget {
 
   final bool activo;
 
+  /// En el móvil solo se marca lo inactivo (lo normal es estar activo), para
+  /// dejar más sitio al nombre en las filas.
   @override
-  Widget build(BuildContext context) => activo
-      ? const Etiqueta('Activo', color: Colors.green)
-      : const Etiqueta('Inactivo', color: Colors.grey);
+  Widget build(BuildContext context) {
+    if (!activo) return const Etiqueta('Inactivo', color: ColoresEstado.neutro);
+    if (esMovil(context)) return const SizedBox.shrink();
+    return const Etiqueta('Activo', color: ColoresEstado.correcto);
+  }
 }
 
 /// Opción de un menú contextual (tres puntos) de una fila.

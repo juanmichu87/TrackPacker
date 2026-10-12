@@ -51,6 +51,15 @@ void main() {
       expect(_id(extraerId(leido, patron: r.patron)), '987654321');
     });
 
+    test('etiqueta real de ejemplo: 26/000201566', () {
+      const leido = '26/000201566';
+      final r = sugerirRegla(leido)!;
+      expect(r.id, '000201566');
+      expect(_id(extraerId(leido, patron: r.patron, longitudMin: 9, longitudMax: 9)), '000201566');
+      // Sin patrón se rechaza, porque lleva una barra
+      expect(extraerId(leido), isA<IdInvalido>());
+    });
+
     test('sin números no hay sugerencia', () {
       expect(sugerirRegla('ABC'), isNull);
     });
