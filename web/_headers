@@ -1,5 +1,7 @@
 # Netlify: el navegador comprueba en cada visita si hay una versión nueva de la
 # app (los archivos de Flutter no llevan huella en el nombre). Si no ha cambiado,
 # el servidor responde "304" y no se vuelve a descargar.
+# X-Robots-Tag: app privada, que los buscadores no indexen ninguna página.
 /*
   Cache-Control: public, max-age=0, must-revalidate
+  X-Robots-Tag: noindex, nofollow
