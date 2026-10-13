@@ -19,31 +19,25 @@ class AuthRepository {
 
   Session? get sesionActual => _client.auth.currentSession;
 
-  Future<void> iniciarSesion({
-    required String usuario,
-    required String contrasena,
-  }) async {
-    await _client.auth.signInWithPassword(
-      email: emailDeUsuario(usuario),
-      password: contrasena,
-    );
+  Future<void> iniciarSesion({required String usuario, required String contrasena}) async {
+    await _client.auth.signInWithPassword(email: emailDeUsuario(usuario), password: contrasena);
   }
 
   Future<void> cerrarSesion() => _client.auth.signOut();
 
-  /// Perfil y permisos del usuario. Null si no tiene perfil o está desactivado.
+  /// Perfil y permisos del usuario en una sola consulta (los permisos llegan
+  /// embebidos a través de su rol). Null si no tiene perfil o está desactivado.
   Future<Perfil?> cargarPerfil(String userId) async {
     final fila = await _client
         .from('usuarios')
-        .select('id, usuario, nombre_completo, rol, cliente_id, activo')
+        .select(
+          'id, usuario, nombre_completo, rol, cliente_id, activo, roles(rol_permisos(permiso))',
+        )
         .eq('id', userId)
         .maybeSingle();
     if (fila == null || fila['activo'] != true) return null;
 
-    final permisos = await _client
-        .from('rol_permisos')
-        .select('permiso')
-        .eq('rol', fila['rol'] as String);
+    final permisos = (fila['roles'] as Map?)?['rol_permisos'] as List? ?? const [];
 
     return Perfil(
       id: fila['id'] as String,

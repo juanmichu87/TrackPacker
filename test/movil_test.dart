@@ -54,8 +54,10 @@ void main() {
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.byType(NavigationBar), findsNothing);
     for (final s in seccionesAdmin) {
-      expect(find.descendant(of: find.byType(MenuLateral), matching: find.text(s.etiqueta)),
-          findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(MenuLateral), matching: find.text(s.etiqueta)),
+        findsOneWidget,
+      );
     }
   });
 

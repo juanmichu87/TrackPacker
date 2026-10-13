@@ -19,8 +19,7 @@ const formatosEscaner = <String, BarcodeFormat>{
 
 /// Formato del escáner → formato de la base de datos (null si no lo usamos).
 String? formatoDesdeEscaner(BarcodeFormat formato) => switch (formato) {
-  BarcodeFormat.itf14 || BarcodeFormat.itf2of5 ||
-  BarcodeFormat.itf2of5WithChecksum => 'itf',
+  BarcodeFormat.itf14 || BarcodeFormat.itf2of5 || BarcodeFormat.itf2of5WithChecksum => 'itf',
   _ => formatosEscaner.entries.where((e) => e.value == formato).firstOrNull?.key,
 };
 
@@ -44,12 +43,7 @@ final _soloDigitos = RegExp(r'^\d+$');
 
 /// Obtiene el ID numérico de un bulto a partir del contenido leído, con la
 /// configuración del cliente. Es la misma regla que aplicará el repartidor.
-ResultadoId extraerId(
-  String leido, {
-  String? patron,
-  int? longitudMin,
-  int? longitudMax,
-}) {
+ResultadoId extraerId(String leido, {String? patron, int? longitudMin, int? longitudMax}) {
   var id = leido.trim();
 
   if (patron != null && patron.trim().isNotEmpty) {
@@ -78,6 +72,47 @@ ResultadoId extraerId(
   }
   return IdValido(id);
 }
+
+/// Regla de lectura de un cliente (formatos y cómo extraer el ID).
+class ReglaCliente {
+  const ReglaCliente({required this.formatos, this.patron, this.longitudMin, this.longitudMax});
+
+  factory ReglaCliente.fromJson(Map<String, dynamic> j) => ReglaCliente(
+    formatos: [for (final f in j['formatos'] as List) f as String],
+    patron: j['patron_extraccion'] as String?,
+    longitudMin: j['longitud_min'] as int?,
+    longitudMax: j['longitud_max'] as int?,
+  );
+
+  final List<String> formatos;
+  final String? patron;
+  final int? longitudMin;
+  final int? longitudMax;
+
+  ResultadoId extraer(String leido) =>
+      extraerId(leido, patron: patron, longitudMin: longitudMin, longitudMax: longitudMax);
+}
+
+/// Extrae el ID con las reglas de los clientes de una ruta: vale la primera
+/// regla con la que el código es válido. Sin reglas, solo se exige que el
+/// código sea numérico.
+ResultadoId extraerIdConReglas(String leido, List<ReglaCliente> reglas) {
+  if (reglas.isEmpty) return extraerId(leido);
+  IdInvalido? primerError;
+  for (final regla in reglas) {
+    switch (regla.extraer(leido)) {
+      case final IdValido valido:
+        return valido;
+      case final IdInvalido error:
+        primerError ??= error;
+    }
+  }
+  return primerError!;
+}
+
+/// Unión de los formatos de varias reglas (para limitar lo que busca el escáner).
+List<String>? formatosDeReglas(List<ReglaCliente> reglas) =>
+    reglas.isEmpty ? null : {for (final r in reglas) ...r.formatos}.toList();
 
 /// Configuración propuesta a partir de una etiqueta de ejemplo.
 class ReglaSugerida {

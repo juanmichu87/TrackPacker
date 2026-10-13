@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/sesion.dart';
+import 'aviso_esquema.dart';
+import 'responsive.dart';
 
 /// Estructura común de las zonas con sesión: barra superior con el usuario y
 /// botón de cerrar sesión.
@@ -15,7 +17,7 @@ class PanelScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(titulo), actions: const [AccionesUsuario()]),
-      body: SafeArea(child: child),
+      body: SafeArea(child: AvisoEsquema(child: child)),
     );
   }
 }
@@ -28,7 +30,7 @@ class AccionesUsuario extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sesion = ref.watch(sesionProvider);
     final nombre = sesion is SesionIniciada ? sesion.perfil.nombreVisible : '';
-    final estrecho = MediaQuery.sizeOf(context).width < 600;
+    final estrecho = context.esPantallaMovil;
 
     return Row(
       mainAxisSize: MainAxisSize.min,

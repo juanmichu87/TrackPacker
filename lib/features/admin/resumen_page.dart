@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/tema.dart';
+import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
 
@@ -72,6 +73,13 @@ class ResumenPage extends ConsumerWidget {
                 color: r.noEntregadosHoy > 0 ? ColoresEstado.peligro : null,
               ),
               _Dato(
+                'Devoluciones',
+                r.devolucionesHoy,
+                Icons.assignment_return_outlined,
+                '/admin/repartos',
+                color: r.devolucionesHoy > 0 ? ColoresEstado.aviso : null,
+              ),
+              _Dato(
                 'Repartos en curso',
                 r.repartosAbiertos,
                 Icons.local_shipping_outlined,
@@ -135,31 +143,34 @@ class _Tarjetas extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+    // 2 columnas en el móvil, más cuanto más ancha es la pantalla
+    return RejillaAdaptable(
+      anchoMinimo: 150,
       children: [
         for (final d in datos)
-          SizedBox(
-            width: 200,
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: d.ruta == null ? null : () => context.go(d.ruta!),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(d.icono, color: d.color ?? tema.colorScheme.primary),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${d.valor}',
-                        style: tema.textTheme.headlineMedium?.copyWith(color: d.color),
-                      ),
-                      Text(d.titulo, style: tema.textTheme.bodyMedium),
-                    ],
-                  ),
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: d.ruta == null ? null : () => context.go(d.ruta!),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(d.icono, color: d.color ?? tema.colorScheme.primary),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${d.valor}',
+                      style: tema.textTheme.headlineMedium?.copyWith(color: d.color),
+                    ),
+                    Text(
+                      d.titulo,
+                      style: tema.textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ),

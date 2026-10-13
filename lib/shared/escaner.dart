@@ -7,6 +7,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../core/codigos.dart';
 import '../core/formato.dart';
 import '../core/plataforma/plataforma.dart';
+import 'responsive.dart';
+import 'ui.dart';
 
 /// Resultado de leer un código: contenido y formato (null si se escribió a mano
 /// o el escáner no lo identifica).
@@ -16,22 +18,30 @@ class LecturaCodigo {
   final String contenido;
   final String? formato;
 
-  String get nombreFormato =>
-      formato == null ? 'Desconocido' : formatosCodigo[formato] ?? formato!;
+  String get nombreFormato => formato == null ? 'Desconocido' : formatosCodigo[formato] ?? formato!;
 }
 
-/// Abre el escáner a pantalla completa, lee un único código y lo devuelve.
+/// Abre el escáner, lee un único código y lo devuelve: a pantalla completa en
+/// el móvil y en una ventana centrada en tablet y ordenador.
 /// `formatos` limita los formatos buscados (códigos de la BD); null = todos.
 Future<LecturaCodigo?> leerCodigo(
   BuildContext context, {
   String titulo = 'Escanear código',
   List<String>? formatos,
-}) => Navigator.of(context).push<LecturaCodigo>(
-  MaterialPageRoute(
-    fullscreenDialog: true,
-    builder: (_) => _PantallaLecturaUnica(titulo: titulo, formatos: formatos),
-  ),
-);
+}) {
+  final pantalla = _PantallaLecturaUnica(titulo: titulo, formatos: formatos);
+  if (context.esPantallaMovil) {
+    return Navigator.of(context)
+        .push<LecturaCodigo>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => pantalla));
+  }
+  return showDialog<LecturaCodigo>(
+    context: context,
+    builder: (_) => Dialog(
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(width: 720, height: 600, child: pantalla),
+    ),
+  );
+}
 
 class _PantallaLecturaUnica extends StatefulWidget {
   const _PantallaLecturaUnica({required this.titulo, this.formatos});
@@ -99,9 +109,7 @@ class VistaEscaner extends StatefulWidget {
 class _VistaEscanerState extends State<VistaEscaner> {
   late final MobileScannerController _controlador = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
-    formats: [
-      for (final f in widget.formatos ?? formatosEscaner.keys) ?formatosEscaner[f],
-    ],
+    formats: [for (final f in widget.formatos ?? formatosEscaner.keys) ?formatosEscaner[f]],
     // Resolución alta: los códigos lineales largos (Code 39, 128) necesitan
     // muchos píxeles para distinguir barras finas.
     cameraResolution: const Size(1920, 1080),
@@ -155,7 +163,8 @@ class _VistaEscanerState extends State<VistaEscaner> {
     if (!contextoSeguro) {
       return const _MensajeCamara(
         icono: Icons.lock_open,
-        texto: 'El navegador no permite usar la cámara en esta dirección. '
+        texto:
+            'El navegador no permite usar la cámara en esta dirección. '
             'Abre la app con https:// (o desde localhost).',
       );
     }
@@ -173,7 +182,9 @@ class _VistaEscanerState extends State<VistaEscaner> {
             texto: 'Abriendo la cámara…\nSi el navegador lo pide, permite el acceso.',
           ),
         ),
-        IgnorePointer(child: CustomPaint(painter: _MarcoLectura(destello: _destello))),
+        IgnorePointer(
+          child: CustomPaint(painter: _MarcoLectura(destello: _destello)),
+        ),
         const Positioned(
           top: 16,
           left: 16,
@@ -181,22 +192,14 @@ class _VistaEscanerState extends State<VistaEscaner> {
           child: Text(
             'Coloca el código completo dentro del recuadro, en horizontal',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              shadows: [Shadow(blurRadius: 4)],
-            ),
+            style: TextStyle(color: Colors.white, fontSize: 15, shadows: [Shadow(blurRadius: 4)]),
           ),
         ),
         Positioned(
           left: 8,
           right: 8,
           bottom: 8,
-          child: _Controles(
-            controlador: _controlador,
-            zoom: _zoom,
-            alCambiarZoom: _cambiarZoom,
-          ),
+          child: _Controles(controlador: _controlador, zoom: _zoom, alCambiarZoom: _cambiarZoom),
         ),
       ],
     );
@@ -262,7 +265,9 @@ class _Controles extends StatelessWidget {
               child: Row(
                 children: [
                   const Icon(Icons.zoom_out, color: Colors.white),
-                  Expanded(child: Slider(value: zoom, onChanged: alCambiarZoom)),
+                  Expanded(
+                    child: Slider(value: zoom, onChanged: alCambiarZoom),
+                  ),
                   const Icon(Icons.zoom_in, color: Colors.white),
                 ],
               ),
@@ -316,8 +321,10 @@ class _LeerDeFotoState extends State<LeerDeFoto> {
       if (!mounted) return;
       if (codigos.isEmpty) {
         vibrar(larga: true);
-        avisar('No se encontró ningún código en la foto. Haz la foto más cerca, '
-            'enfocada y con el código entero.');
+        avisar(
+          'No se encontró ningún código en la foto. Haz la foto más cerca, '
+          'enfocada y con el código entero.',
+        );
         return;
       }
       final elegido = codigos.length == 1 ? codigos.first : await _elegir(codigos);
@@ -332,9 +339,8 @@ class _LeerDeFotoState extends State<LeerDeFoto> {
   /// Si la foto tiene varios códigos (p. ej. una etiqueta con dos), se elige uno.
   Future<({String contenido, String? formato})?> _elegir(
     List<({String contenido, String? formato})> codigos,
-  ) => showModalBottomSheet(
-    context: context,
-    showDragHandle: true,
+  ) => mostrarPanel(
+    context,
     builder: (hoja) => SafeArea(
       child: ListView(
         shrinkWrap: true,
@@ -344,7 +350,9 @@ class _LeerDeFotoState extends State<LeerDeFoto> {
             ListTile(
               leading: const Icon(Icons.qr_code_2),
               title: Text(c.contenido),
-              subtitle: Text(c.formato == null ? 'Formato desconocido' : formatosCodigo[c.formato] ?? c.formato!),
+              subtitle: Text(
+                c.formato == null ? 'Formato desconocido' : formatosCodigo[c.formato] ?? c.formato!,
+              ),
               onTap: () => Navigator.pop(hoja, c),
             ),
         ],
@@ -404,10 +412,12 @@ class EntradaManual extends StatefulWidget {
 
 class _EntradaManualState extends State<EntradaManual> {
   final _texto = TextEditingController();
+  final _foco = FocusNode();
 
   @override
   void dispose() {
     _texto.dispose();
+    _foco.dispose();
     super.dispose();
   }
 
@@ -416,6 +426,8 @@ class _EntradaManualState extends State<EntradaManual> {
     if (valor.isEmpty) return;
     _texto.clear();
     widget.alEnviar(valor);
+    // Mantener el foco: con un lector de pistola se escanea un bulto tras otro
+    _foco.requestFocus();
   }
 
   @override
@@ -429,12 +441,15 @@ class _EntradaManualState extends State<EntradaManual> {
             Expanded(
               child: TextField(
                 controller: _texto,
+                focusNode: _foco,
                 decoration: const InputDecoration(
                   hintText: 'O escribe el código',
                   prefixIcon: Icon(Icons.keyboard_outlined),
                   isDense: true,
                 ),
                 textInputAction: TextInputAction.done,
+                // Sin esto, Intro quita el foco y el siguiente escaneo se pierde
+                onEditingComplete: () {},
                 onSubmitted: (_) => _enviar(),
               ),
             ),
@@ -487,7 +502,11 @@ class _MensajeCamara extends StatelessWidget {
           children: [
             Icon(icono, color: Colors.white70, size: 48),
             const SizedBox(height: 12),
-            Text(texto, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
+            Text(
+              texto,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white),
+            ),
           ],
         ),
       ),

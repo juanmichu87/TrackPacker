@@ -40,9 +40,7 @@ final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(ref.watch(supabaseProvider)),
 );
 
-final sesionProvider = NotifierProvider<SesionNotifier, EstadoSesion>(
-  SesionNotifier.new,
-);
+final sesionProvider = NotifierProvider<SesionNotifier, EstadoSesion>(SesionNotifier.new);
 
 class SesionNotifier extends Notifier<EstadoSesion> {
   /// Usuario cuyo perfil está cargado o cargándose.
@@ -92,9 +90,7 @@ class SesionNotifier extends Notifier<EstadoSesion> {
       if (_userId != userId) return; // la sesión cambió mientras cargaba
 
       if (perfil == null || perfil.area == null) {
-        state = const SinSesion(
-          aviso: 'Tu cuenta no tiene acceso. Contacta con el administrador.',
-        );
+        state = const SinSesion(aviso: 'Tu cuenta no tiene acceso. Contacta con el administrador.');
         await _repo.cerrarSesion();
         return;
       }

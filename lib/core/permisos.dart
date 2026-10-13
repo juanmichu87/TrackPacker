@@ -9,6 +9,7 @@ abstract final class Permisos {
   static const repartosOperar = 'repartos.operar';
   static const incidenciasCrear = 'incidencias.crear';
   static const incidenciasGestionar = 'incidencias.gestionar';
+  static const datosEliminar = 'datos.eliminar';
 }
 
 /// Zona de la app a la que entra cada usuario. Se decide por permisos, no por

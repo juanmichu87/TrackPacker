@@ -205,6 +205,7 @@ class RepartoVista {
     required this.entregados,
     required this.pendientes,
     required this.noEntregados,
+    this.devoluciones = 0,
     this.cargaConfirmadaEn,
     this.cerradoEn,
     this.motivoCierre,
@@ -230,6 +231,7 @@ class RepartoVista {
     entregados: j['entregados'] as int,
     pendientes: j['pendientes'] as int,
     noEntregados: j['no_entregados'] as int,
+    devoluciones: (j['devoluciones'] as num?)?.toInt() ?? 0,
   );
 
   final String id;
@@ -245,6 +247,9 @@ class RepartoVista {
   final int entregados;
   final int pendientes;
   final int noEntregados;
+
+  /// Paquetes que las tiendas dieron al repartidor para devolver.
+  final int devoluciones;
 
   /// Salida del reparto ("Mañana 06:00–10:00"), si se hizo con salida.
   final String? salida;
@@ -318,4 +323,5 @@ class Resumen {
   int get entregadosHoy => _bultos('entregados');
   int get pendientesHoy => _bultos('pendientes');
   int get noEntregadosHoy => _bultos('no_entregados');
+  int get devolucionesHoy => _bultos('devoluciones');
 }

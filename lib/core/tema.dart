@@ -112,9 +112,7 @@ ThemeData temaTrackPack() {
       fillColor: Paleta.blanco,
       border: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFBDBDBD))),
       enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFBDBDBD))),
-      focusedBorder: const OutlineInputBorder(
-        borderSide: BorderSide(color: Paleta.rojo, width: 2),
-      ),
+      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Paleta.rojo, width: 2)),
       // Etiqueta en rojo solo en el campo activo (o con error); si no, gris
       // oscuro, para que un campo relleno no parezca un error.
       floatingLabelStyle: WidgetStateTextStyle.resolveWith(

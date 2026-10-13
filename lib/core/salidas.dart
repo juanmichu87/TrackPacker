@@ -68,6 +68,29 @@ Salida? salidaActual(Iterable<Salida> salidas, DateTime momento) {
   return abiertas.first;
 }
 
+/// Próxima salida que va a abrir (la que empieza antes a partir de ese
+/// momento, mirando hasta una semana). Null si no hay salidas activas.
+Salida? proximaSalida(Iterable<Salida> salidas, DateTime momento) {
+  Salida? mejor;
+  int? mejorEspera;
+  final hoy = DateTime(momento.year, momento.month, momento.day);
+  final minutoActual = momento.hour * 60 + momento.minute;
+  for (final s in salidas.where((s) => s.activa)) {
+    for (var dias = 0; dias < 8; dias++) {
+      final dia = hoy.add(Duration(days: dias));
+      if (!s.dias.contains(dia.weekday)) continue;
+      final espera = dias * 24 * 60 + s.inicio - minutoActual;
+      if (espera <= 0) continue;
+      if (mejorEspera == null || espera < mejorEspera) {
+        mejor = s;
+        mejorEspera = espera;
+      }
+      break;
+    }
+  }
+  return mejor;
+}
+
 /// "06:30:00" o "06:30" → 390
 int minutosDeHora(String hora) {
   final partes = hora.split(':');
@@ -110,8 +133,7 @@ const nombresDias = {1: 'L', 2: 'M', 3: 'X', 4: 'J', 5: 'V', 6: 'S', 7: 'D'};
 String textoDias(Set<int> dias) {
   if (dias.length == 7) return 'Todos los días';
   final ordenados = dias.toList()..sort();
-  final seguidos = ordenados.length > 2 &&
-      ordenados.last - ordenados.first == ordenados.length - 1;
+  final seguidos = ordenados.length > 2 && ordenados.last - ordenados.first == ordenados.length - 1;
   if (seguidos) return '${nombresDias[ordenados.first]} a ${nombresDias[ordenados.last]}';
   return ordenados.map((d) => nombresDias[d]).join(' ');
 }

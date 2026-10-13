@@ -13,17 +13,33 @@ String fechaHora(DateTime d) {
 }
 
 const _sinTilde = {
-  'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a',
-  'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
-  'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
-  'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o',
-  'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
-  'ñ': 'n', 'ç': 'c',
+  'á': 'a',
+  'à': 'a',
+  'ä': 'a',
+  'â': 'a',
+  'é': 'e',
+  'è': 'e',
+  'ë': 'e',
+  'ê': 'e',
+  'í': 'i',
+  'ì': 'i',
+  'ï': 'i',
+  'î': 'i',
+  'ó': 'o',
+  'ò': 'o',
+  'ö': 'o',
+  'ô': 'o',
+  'ú': 'u',
+  'ù': 'u',
+  'ü': 'u',
+  'û': 'u',
+  'ñ': 'n',
+  'ç': 'c',
 };
 
 /// Acentos escritos como carácter aparte (A + ◌́), habituales al copiar texto
 /// o escribir desde algunos teclados.
-final _acentosCombinados = RegExp('[̀-ͯ]');
+final _acentosCombinados = RegExp(r'[\u0300-\u036f]', unicode: true);
 
 /// Texto para comparar en búsquedas: sin espacios a los lados, en minúsculas
 /// y sin tildes («Las ÁGUILAS» → «las aguilas»).
@@ -71,3 +87,7 @@ const formatosCodigo = {
   'pdf417': 'PDF417',
   'aztec': 'Aztec',
 };
+
+/// «1 bulto», «3 bultos». Si el plural no es singular + «s», se indica.
+String cantidad(int n, String singular, [String? plural]) =>
+    '$n ${n == 1 ? singular : (plural ?? '${singular}s')}';

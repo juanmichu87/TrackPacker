@@ -71,4 +71,33 @@ void main() {
     expect(formatoDesdeEscaner(BarcodeFormat.itf14), 'itf');
     expect(formatoDesdeEscaner(BarcodeFormat.maxiCode), isNull);
   });
+
+  group('extraerIdConReglas', () {
+    const numerico9 = ReglaCliente(formatos: ['code128'], longitudMin: 9, longitudMax: 9);
+    const conBarra = ReglaCliente(
+      formatos: ['code128', 'code39'],
+      patron: r'(?<!\d)(\d{9})(?!\d)',
+      longitudMin: 9,
+      longitudMax: 9,
+    );
+
+    test('vale la primera regla con la que el código es válido', () {
+      expect(_id(extraerIdConReglas('26/000201566', [numerico9, conBarra])), '000201566');
+      expect(_id(extraerIdConReglas('123456789', [numerico9, conBarra])), '123456789');
+    });
+
+    test('si ninguna vale, devuelve el primer motivo', () {
+      expect(extraerIdConReglas('12', [numerico9, conBarra]), isA<IdInvalido>());
+    });
+
+    test('sin reglas solo exige números', () {
+      expect(_id(extraerIdConReglas('42', const [])), '42');
+      expect(extraerIdConReglas('A42', const []), isA<IdInvalido>());
+    });
+
+    test('formatos de varias reglas sin repetir', () {
+      expect(formatosDeReglas([numerico9, conBarra]), ['code128', 'code39']);
+      expect(formatosDeReglas(const []), isNull);
+    });
+  });
 }

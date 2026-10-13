@@ -103,9 +103,7 @@ Future<List<({String contenido, String? formato})>> leerCodigosDeFoto(
     [bytes.toJS].toJS,
     web.BlobPropertyBag(type: foto.mimeType ?? 'image/jpeg'),
   );
-  final nombres = [
-    for (final f in formatos ?? _formatosZxing.keys) ...?_formatosZxing[f],
-  ];
+  final nombres = [for (final f in formatos ?? _formatosZxing.keys) ...?_formatosZxing[f]];
   final resultados = await zxing
       .readBarcodes(
         imagen,

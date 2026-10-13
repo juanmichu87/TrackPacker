@@ -31,18 +31,6 @@ class AdminRepository {
   Future<Resumen> resumen() async =>
       Resumen(Map<String, dynamic>.from(await _db.rpc('admin_resumen') as Map));
 
-  /// Versión del esquema de la base de datos (0 si es anterior a la migración 07,
-  /// que creó la columna).
-  Future<int> versionEsquema() async {
-    try {
-      final fila = await _db.from('ajustes').select('version_esquema').single();
-      return (fila['version_esquema'] as num).toInt();
-    } on PostgrestException catch (e) {
-      if (e.code == '42703') return 0; // columna inexistente
-      rethrow;
-    }
-  }
-
   Future<Ajustes> ajustes() async => Ajustes.fromJson(await _db.from('ajustes').select().single());
 
   Future<void> guardarAjustes({required int diasFotos, required int diasBultos}) => _db
@@ -207,6 +195,24 @@ class AdminRepository {
   Future<void> cambiarContrasena(String id, String contrasena) =>
       _db.rpc('admin_cambiar_contrasena', params: {'p_id': id, 'p_contrasena': contrasena});
 
+  /// Elimina un reparto con sus bultos, incidencias y fotos (también los
+  /// archivos). Devuelve cuántas fotos se borraron.
+  Future<int> eliminarReparto(String id) async =>
+      _borrarFotos(await _db.rpc('admin_eliminar_reparto', params: {'p_id': id}) as List);
+
+  /// Elimina un usuario con todo su historial (repartos, bultos, fotos,
+  /// incidencias). Devuelve cuántas fotos se borraron.
+  Future<int> eliminarUsuarioConHistorial(String id) async => _borrarFotos(
+    await _db.rpc('admin_eliminar_usuario_con_historial', params: {'p_id': id}) as List,
+  );
+
+  /// Borra de Storage los archivos de las fotos ya eliminadas de la base de datos.
+  Future<int> _borrarFotos(List rutas) async {
+    final archivos = [for (final r in rutas) r as String];
+    if (archivos.isNotEmpty) await _db.storage.from('entregas').remove(archivos);
+    return archivos.length;
+  }
+
   Future<void> eliminarUsuario(String id) =>
       _db.rpc('admin_eliminar_usuario', params: {'p_id': id});
 
@@ -242,9 +248,6 @@ final adminRepositoryProvider = Provider<AdminRepository>(
 // Listas cacheadas. Tras guardar cambios se invalidan con ref.invalidate(...).
 final resumenProvider = FutureProvider<Resumen>(
   (ref) => ref.watch(adminRepositoryProvider).resumen(),
-);
-final versionEsquemaProvider = FutureProvider<int>(
-  (ref) => ref.watch(adminRepositoryProvider).versionEsquema(),
 );
 final ajustesProvider = FutureProvider<Ajustes>(
   (ref) => ref.watch(adminRepositoryProvider).ajustes(),

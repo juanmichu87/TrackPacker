@@ -86,20 +86,27 @@ void main() {
   group('mensajeError', () {
     test('usa el mensaje de nuestras funciones SQL', () {
       expect(
-        mensajeError(const PostgrestException(message: 'No puedes eliminar tu propio usuario', code: 'P0001')),
+        mensajeError(
+          const PostgrestException(message: 'No puedes eliminar tu propio usuario', code: 'P0001'),
+        ),
         'No puedes eliminar tu propio usuario',
       );
     });
 
     test('traduce restricciones conocidas', () {
       expect(
-        mensajeError(const PostgrestException(
-          message: 'new row violates check constraint "cliente_requerido"',
-          code: '23514',
-        )),
+        mensajeError(
+          const PostgrestException(
+            message: 'new row violates check constraint "cliente_requerido"',
+            code: '23514',
+          ),
+        ),
         contains('empresa asignada'),
       );
-      expect(mensajeError(const PostgrestException(message: 'x', code: '23503')), contains('desactívalo'));
+      expect(
+        mensajeError(const PostgrestException(message: 'x', code: '23503')),
+        contains('desactívalo'),
+      );
     });
 
     test('muestra errores de validación tal cual', () {

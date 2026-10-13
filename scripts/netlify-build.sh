@@ -27,3 +27,12 @@ flutter build web --release \
   --dart-define=SUPABASE_URL="$SUPABASE_URL" \
   --dart-define=SUPABASE_KEY="$SUPABASE_KEY" \
   --dart-define=AUTH_DOMINIO="$AUTH_DOMINIO"
+
+# Prepara la conexión con Supabase mientras se descarga la app (ahorra el
+# tiempo de abrir la conexión segura en la primera consulta).
+sed -i "s#</head>#<link rel=\"preconnect\" href=\"$SUPABASE_URL\" crossorigin></head>#" build/web/index.html
+if ! grep -q 'rel="preconnect"' build/web/index.html; then
+  echo "ERROR: no se pudo añadir el preconnect a index.html" >&2
+  exit 1
+fi
+echo "preconnect añadido a index.html"

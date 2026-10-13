@@ -78,4 +78,16 @@ void main() {
     expect(textoDias({1, 2, 3, 4, 5}), 'L a V');
     expect(textoDias({1, 3, 5}), 'L X V');
   });
+
+  test('próxima salida: la siguiente hoy o la del próximo día con salida', () {
+    final laborables = _salida('Mañana', '06:30', '09:30', dias: {1, 2, 3, 4, 5});
+    final tarde = _salida('Tarde', '15:30', '18:30', dias: {1, 2, 3, 4, 5});
+    // Lunes 12:00 → la de la tarde
+    expect(proximaSalida([laborables, tarde], _lunes(12))?.nombre, 'Tarde');
+    // Lunes 20:00 → la de mañana a las 06:30
+    expect(proximaSalida([laborables, tarde], _lunes(20))?.nombre, 'Mañana');
+    // Viernes 20:00 → la del lunes (el fin de semana no hay)
+    expect(proximaSalida([laborables, tarde], DateTime(2026, 10, 9, 20))?.nombre, 'Mañana');
+    expect(proximaSalida(const [], _lunes(12)), isNull);
+  });
 }

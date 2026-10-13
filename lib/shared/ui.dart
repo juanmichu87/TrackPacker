@@ -3,18 +3,58 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/errores.dart';
 import '../core/tema.dart';
+import 'responsive.dart';
 
 /// Pantalla estrecha (móvil en vertical).
-bool esMovil(BuildContext context) => MediaQuery.sizeOf(context).width < 600;
+bool esMovil(BuildContext context) => context.esPantallaMovil;
+
+/// Ventana emergente adaptable: en el móvil, panel inferior que se desliza;
+/// en tablet y ordenador, ventana centrada con botón de cerrar, como en una
+/// app de escritorio. El contenido es el mismo en los dos casos.
+Future<T?> mostrarPanel<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  double anchoMaximo = 520,
+}) {
+  if (esMovil(context)) {
+    return showModalBottomSheet<T>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: builder,
+    );
+  }
+  return showDialog<T>(
+    context: context,
+    builder: (contexto) => Dialog(
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: anchoMaximo),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 20),
+              child: builder(contexto),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                tooltip: 'Cerrar',
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(contexto),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 /// Muestra carga, error (con reintentar) o los datos de un AsyncValue.
 class VistaAsync<T> extends StatelessWidget {
-  const VistaAsync({
-    super.key,
-    required this.valor,
-    required this.datos,
-    this.alReintentar,
-  });
+  const VistaAsync({super.key, required this.valor, required this.datos, this.alReintentar});
 
   final AsyncValue<T> valor;
   final Widget Function(T datos) datos;
@@ -72,6 +112,101 @@ Future<bool> ejecutar(BuildContext context, Future<void> Function() accion, {Str
   }
 }
 
+/// Confirmación reforzada para borrados irreversibles: hay que escribir
+/// `palabra` (p. ej. el nombre de usuario) para habilitar el botón.
+Future<bool> confirmarEscribiendo(
+  BuildContext context, {
+  required String titulo,
+  required String mensaje,
+  required String palabra,
+  String accion = 'Eliminar definitivamente',
+}) async {
+  final resultado = await showDialog<bool>(
+    context: context,
+    builder: (_) =>
+        _ConfirmacionEscrita(titulo: titulo, mensaje: mensaje, palabra: palabra, accion: accion),
+  );
+  return resultado ?? false;
+}
+
+class _ConfirmacionEscrita extends StatefulWidget {
+  const _ConfirmacionEscrita({
+    required this.titulo,
+    required this.mensaje,
+    required this.palabra,
+    required this.accion,
+  });
+
+  final String titulo;
+  final String mensaje;
+  final String palabra;
+  final String accion;
+
+  @override
+  State<_ConfirmacionEscrita> createState() => _ConfirmacionEscritaState();
+}
+
+class _ConfirmacionEscritaState extends State<_ConfirmacionEscrita> {
+  final _texto = TextEditingController();
+
+  @override
+  void dispose() {
+    _texto.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
+    final coincide = _texto.text.trim() == widget.palabra;
+    return AlertDialog(
+      icon: Icon(Icons.delete_forever, color: colores.error, size: 40),
+      title: Text(widget.titulo),
+      scrollable: true,
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.mensaje),
+            const SizedBox(height: 16),
+            Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(text: 'Para confirmar, escribe '),
+                  TextSpan(
+                    text: widget.palabra,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _texto,
+              autofocus: true,
+              autocorrect: false,
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: colores.error,
+            foregroundColor: colores.onError,
+          ),
+          onPressed: coincide ? () => Navigator.pop(context, true) : null,
+          child: Text(widget.accion),
+        ),
+      ],
+    );
+  }
+}
+
 /// Diálogo de confirmación. `peligroso` pinta el botón en rojo.
 Future<bool> confirmar(
   BuildContext context, {
@@ -90,7 +225,10 @@ Future<bool> confirmar(
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
         FilledButton(
           style: peligroso
-              ? FilledButton.styleFrom(backgroundColor: colores.error, foregroundColor: colores.onError)
+              ? FilledButton.styleFrom(
+                  backgroundColor: colores.error,
+                  foregroundColor: colores.onError,
+                )
               : null,
           onPressed: () => Navigator.pop(context, true),
           child: Text(accion),
@@ -215,7 +353,6 @@ class _DialogoFormularioState extends State<DialogoFormulario> {
       ],
     );
   }
-
 }
 
 /// Validador de campo obligatorio.
@@ -309,7 +446,6 @@ class BarraLista extends StatelessWidget {
       ),
     );
   }
-
 }
 
 /// Mensaje centrado para listas vacías.
@@ -342,7 +478,10 @@ class Etiqueta extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: color.withValues(alpha: 0.6)),
     ),
-    child: Text(texto, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+    child: Text(
+      texto,
+      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+    ),
   );
 }
 

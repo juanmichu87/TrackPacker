@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formato.dart';
+import '../../core/permisos.dart';
 import '../../shared/ui.dart';
 import '../auth/sesion.dart';
 import 'datos/admin_repository.dart';
@@ -72,6 +73,38 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
     if (ok) _refrescar();
   }
 
+  /// Borra el usuario y todo lo que ha generado (repartos, bultos, fotos,
+  /// incidencias). Pensado para usuarios de prueba; pide escribir su nombre.
+  Future<void> _eliminarConHistorial(UsuarioAdmin u) async {
+    if (!await confirmarEscribiendo(
+      context,
+      titulo: 'Eliminar «${u.usuario}» y todo su historial',
+      mensaje:
+          'Se borrarán definitivamente el usuario y TODO lo que ha generado: sus '
+          'repartos, los bultos escaneados, las fotos de entrega y las incidencias. '
+          'No se puede deshacer.\n\n'
+          'Úsalo para usuarios de prueba. Para alguien que deja '
+          'de trabajar, mejor desactívalo y así se conserva su historial.',
+      palabra: u.usuario,
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    var fotos = 0;
+    final ok = await ejecutar(
+      context,
+      () async => fotos = await ref.read(adminRepositoryProvider).eliminarUsuarioConHistorial(u.id),
+    );
+    if (!mounted || !ok) return;
+    mostrarMensaje(
+      context,
+      'Usuario «${u.usuario}» eliminado con su historial'
+      '${fotos == 0 ? '' : ' ($fotos fotos borradas)'}',
+    );
+    _refrescar();
+    ref.invalidate(repartosProvider);
+  }
+
   Future<void> _eliminar(UsuarioAdmin u) async {
     if (!await confirmar(
       context,
@@ -99,6 +132,7 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
     final nombresRol = {for (final r in roles) r.codigo: r.nombre};
     final sesion = ref.watch(sesionProvider);
     final miId = sesion is SesionIniciada ? sesion.perfil.id : null;
+    final puedeBorrarTodo = sesion is SesionIniciada && sesion.perfil.puede(Permisos.datosEliminar);
 
     return Column(
       children: [
@@ -176,6 +210,13 @@ class _UsuariosPageState extends ConsumerState<UsuariosPage> {
                               'Eliminar',
                               Icons.delete_outline,
                               () => _eliminar(u),
+                              peligrosa: true,
+                            ),
+                          if (!esYo && puedeBorrarTodo)
+                            OpcionMenu(
+                              'Eliminar con historial',
+                              Icons.delete_forever,
+                              () => _eliminarConHistorial(u),
                               peligrosa: true,
                             ),
                         ]),

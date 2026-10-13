@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/formato.dart';
 import '../../shared/estados.dart';
 import '../../shared/ui.dart';
+import '../auth/sesion.dart';
+import '../../core/permisos.dart';
 import 'datos/admin_repository.dart';
 import 'datos/modelos.dart';
 
@@ -105,10 +107,11 @@ class _FilaReparto extends StatelessWidget {
           Text(
             [
               fechaHora(r.iniciadoEn),
-              '${r.totalBultos} bultos',
-              '${r.entregados} entregados',
-              if (r.pendientes > 0) '${r.pendientes} pendientes',
-              if (r.noEntregados > 0) '${r.noEntregados} no entregados',
+              cantidad(r.totalBultos, 'bulto'),
+              cantidad(r.entregados, 'entregado'),
+              if (r.pendientes > 0) cantidad(r.pendientes, 'pendiente'),
+              if (r.noEntregados > 0) cantidad(r.noEntregados, 'no entregado', 'no entregados'),
+              if (r.devoluciones > 0) cantidad(r.devoluciones, 'devolución', 'devoluciones'),
             ].join(' · '),
           ),
           const SizedBox(height: 6),
@@ -139,9 +142,36 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
     ref.invalidate(bultosDeRepartoProvider(widget.repartoId));
   }
 
+  /// Borra el reparto con sus bultos, fotos e incidencias (p. ej. pruebas).
+  Future<void> _eliminar(RepartoVista r) async {
+    if (!await confirmarEscribiendo(
+      context,
+      titulo: 'Eliminar este reparto',
+      mensaje:
+          'Se borrarán definitivamente el reparto de ${r.repartidor} en ${r.ruta} y '
+          'todo lo que contiene: ${cantidad(r.totalBultos + r.devoluciones, 'bulto')}, sus fotos de entrega y sus '
+          'incidencias. El cliente dejará de verlos. No se puede deshacer.',
+      palabra: 'ELIMINAR',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    final ok = await ejecutar(
+      context,
+      () => ref.read(adminRepositoryProvider).eliminarReparto(r.id),
+      exito: 'Reparto eliminado',
+    );
+    if (!ok || !mounted) return;
+    ref.invalidate(repartosProvider);
+    ref.invalidate(resumenProvider);
+    context.go('/admin/repartos');
+  }
+
   @override
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
+    final sesion = ref.watch(sesionProvider);
+    final puedeBorrar = sesion is SesionIniciada && sesion.perfil.puede(Permisos.datosEliminar);
 
     return VistaAsync(
       valor: ref.watch(repartoProvider(widget.repartoId)),
@@ -171,6 +201,16 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
                   icon: const Icon(Icons.refresh),
                   onPressed: _refrescar,
                 ),
+                if (puedeBorrar)
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: tema.colorScheme.error,
+                      side: BorderSide(color: tema.colorScheme.error),
+                    ),
+                    onPressed: () => _eliminar(r),
+                    icon: const Icon(Icons.delete_forever),
+                    label: const Text('Eliminar reparto'),
+                  ),
               ],
             ),
           ),
@@ -184,6 +224,8 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
                 if (r.cargaConfirmadaEn != null) Text('Salida: ${fechaHora(r.cargaConfirmadaEn!)}'),
                 if (r.cerradoEn != null) Text('Cierre: ${fechaHora(r.cerradoEn!)}'),
                 Text('${r.entregados}/${r.totalBultos} entregados'),
+                if (r.devoluciones > 0)
+                  Text(cantidad(r.devoluciones, 'devolución', 'devoluciones')),
                 if (r.motivoCierre != null) Text('Motivo del cierre: ${r.motivoCierre}'),
               ],
             ),
