@@ -1,0 +1,5 @@
+# Publicación en Netlify: compila la web con Flutter en cada push.
+# Las reglas de caché y de rutas están en web/_headers y web/_redirects.
+[build]
+  command = "bash scripts/netlify-build.sh"
+  publish = "build/web"
