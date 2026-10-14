@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:track_pack/features/cliente/cliente_inicio_page.dart';
 import 'package:track_pack/features/cliente/datos/cliente_repository.dart';
+import 'package:track_pack/shared/avisos_cambios.dart';
 
 final _bulto = BultoCliente(
   id: 'b1',
@@ -24,6 +25,11 @@ Future<void> _pantalla(WidgetTester tester, Size tamano) async {
         bultosClienteProvider.overrideWith((ref, _) async => [_bulto]),
         tiendasClienteProvider.overrideWith((ref) async => const []),
         incidenciasBultoProvider.overrideWith((ref, _) async => const []),
+        avisosCambiosProvider.overrideWith((ref) {
+          final avisos = AvisosCambios.sinTiempoReal();
+          ref.onDispose(avisos.cerrar);
+          return avisos;
+        }),
       ],
       child: const MaterialApp(home: Scaffold(body: ClienteInicioPage())),
     ),

@@ -41,7 +41,9 @@ Future<void> _pantalla(WidgetTester tester, Size tamano) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [repartidorRepositoryProvider.overrideWithValue(_RepoFalso())],
-      child: MaterialApp(home: Scaffold(body: RepartoPage(reparto: _reparto))),
+      child: MaterialApp(
+        home: Scaffold(body: RepartoPage(reparto: _reparto)),
+      ),
     ),
   );
   await tester.pump();
@@ -49,7 +51,9 @@ Future<void> _pantalla(WidgetTester tester, Size tamano) async {
 }
 
 void main() {
-  testWidgets('repartidor en el ordenador: la descarga se abre junto a las tiendas', (tester) async {
+  testWidgets('repartidor en el ordenador: la descarga se abre junto a las tiendas', (
+    tester,
+  ) async {
     await _pantalla(tester, const Size(1280, 800));
     expect(find.text('Elige una tienda para empezar a descargar.'), findsOneWidget);
 

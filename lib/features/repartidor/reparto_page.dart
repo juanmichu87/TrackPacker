@@ -203,7 +203,11 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
   @override
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
-    final escaner = VistaEscaner(formatos: formatosDeReglas(widget.datos.reglas), alLeer: _leido);
+    final escaner = VistaEscaner(
+      formatos: formatosDeReglas(widget.datos.reglas),
+      alLeer: _leido,
+      disparoUnico: true,
+    );
     final lista = _ListaBultos(
       titulo: 'Bultos cargados',
       bultos: widget.bultos,
@@ -705,7 +709,11 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
           }),
         ),
       ),
-      escaner: VistaEscaner(formatos: formatosDeReglas(widget.datos.reglas), alLeer: _leido),
+      escaner: VistaEscaner(
+        formatos: formatosDeReglas(widget.datos.reglas),
+        alLeer: _leido,
+        disparoUnico: true,
+      ),
       aviso: FranjaAviso(_aviso),
       lista: _devolucion
           ? _ListaBultos(
@@ -938,17 +946,26 @@ class _DisenoEscaneo extends StatelessWidget {
         ],
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        cabecera,
-        ?modo,
-        SizedBox(height: (tamano.height * 0.34).clamp(200.0, 340.0), child: escaner),
-        aviso,
-        Expanded(child: lista),
-        entradaManual,
-        pie,
-      ],
+    // Con el teclado abierto (código a mano) o poca altura, la cámara se oculta
+    // para que la lista, el campo y los botones de abajo nunca se pierdan.
+    final teclado = MediaQuery.viewInsetsOf(context).bottom > 0;
+    return LayoutBuilder(
+      builder: (context, restricciones) {
+        final conCamara = !teclado && restricciones.maxHeight >= 560;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            cabecera,
+            ?modo,
+            if (conCamara)
+              SizedBox(height: (tamano.height * 0.34).clamp(200.0, 340.0), child: escaner),
+            aviso,
+            Expanded(child: lista),
+            entradaManual,
+            pie,
+          ],
+        );
+      },
     );
   }
 }
@@ -1069,12 +1086,26 @@ class _BarraAcciones extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    const alto = Size.fromHeight(52);
+    const texto = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
     return Material(
       elevation: 4,
-      color: Theme.of(context).colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 44),
-        child: Row(children: children),
+      color: tema.colorScheme.surface,
+      child: Theme(
+        // Botones altos y con texto grande: se pulsan bien con una mano
+        data: tema.copyWith(
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(minimumSize: alto, textStyle: texto),
+          ),
+          outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(minimumSize: alto, textStyle: texto),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 44),
+          child: Row(children: children),
+        ),
       ),
     );
   }

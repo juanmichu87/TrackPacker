@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -70,8 +71,10 @@ void main() {
       ),
     );
     expect(find.byType(MenuLateral), findsOneWidget);
-    expect(find.descendant(of: find.byType(MenuLateral), matching: find.text('Mis entregas')),
-        findsNWidgets(2)); // nombre del área y sección
+    expect(
+      find.descendant(of: find.byType(MenuLateral), matching: find.text('Mis entregas')),
+      findsNWidgets(2),
+    ); // nombre del área y sección
   });
 
   testWidgets('cliente en tablet: sin barra lateral (una sola sección)', (tester) async {
@@ -87,4 +90,41 @@ void main() {
     );
     expect(find.byType(NavigationRail), findsNothing);
   });
+
+  testWidgets('el lector se pausa solo con el teléfono en horizontal', (tester) async {
+    const android = TargetPlatform.android;
+    expect(await _telefonoEnHorizontal(tester, const Size(844, 390), android), isTrue);
+    expect(await _telefonoEnHorizontal(tester, const Size(390, 844), android), isFalse);
+    // Tablet en horizontal: el lector sigue activo
+    expect(await _telefonoEnHorizontal(tester, const Size(1180, 820), android), isFalse);
+    // Ventana baja de ordenador: no es un teléfono
+    expect(
+      await _telefonoEnHorizontal(tester, const Size(1280, 560), TargetPlatform.windows),
+      isFalse,
+    );
+  });
+}
+
+Future<bool> _telefonoEnHorizontal(
+  WidgetTester tester,
+  Size tamano,
+  TargetPlatform plataforma,
+) async {
+  debugDefaultTargetPlatformOverride = plataforma;
+  tester.view.physicalSize = tamano;
+  tester.view.devicePixelRatio = 1;
+  late bool resultado;
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Builder(
+        builder: (context) {
+          resultado = context.esTelefonoEnHorizontal;
+          return const SizedBox();
+        },
+      ),
+    ),
+  );
+  debugDefaultTargetPlatformOverride = null;
+  tester.view.reset();
+  return resultado;
 }

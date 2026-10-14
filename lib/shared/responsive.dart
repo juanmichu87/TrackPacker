@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 /// Tamaños de pantalla de la app. Es la ÚNICA fuente de puntos de corte: todas
@@ -27,6 +28,14 @@ extension PantallaContexto on BuildContext {
   TamanoPantalla get tamano => TamanoPantalla.para(MediaQuery.sizeOf(this).width);
   bool get esPantallaMovil => tamano == TamanoPantalla.movil;
   bool get esPantallaEscritorio => tamano == TamanoPantalla.escritorio;
+
+  /// Teléfono (Android o iPhone, también en el navegador) girado en horizontal.
+  /// No incluye tablets ni ventanas bajas de ordenador.
+  bool get esTelefonoEnHorizontal =>
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) &&
+      MediaQuery.orientationOf(this) == Orientation.landscape &&
+      MediaQuery.sizeOf(this).shortestSide < TamanoPantalla.corteTablet;
 }
 
 /// Elige un valor según el tamaño. Si no se da el de tablet se usa el de

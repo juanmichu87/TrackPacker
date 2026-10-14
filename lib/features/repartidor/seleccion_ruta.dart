@@ -9,6 +9,7 @@ import '../../shared/estados.dart';
 import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'datos/repartidor_repository.dart';
+import '../../shared/avisos_cambios.dart';
 
 /// Lista de rutas con su ocupación. Al elegir una, se elige la salida y se
 /// empieza el reparto (estado «carga»).
@@ -64,7 +65,13 @@ class _SeleccionRutaState extends ConsumerState<SeleccionRuta> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RecargaAutomatica(
+    temas: const {TemaCambio.repartos},
+    alCambiar: () => ref.invalidate(rutasRepartidorProvider),
+    child: _contenido(context),
+  );
+
+  Widget _contenido(BuildContext context) {
     final tema = Theme.of(context);
     return Stack(
       children: [

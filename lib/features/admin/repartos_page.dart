@@ -9,6 +9,7 @@ import '../auth/sesion.dart';
 import '../../core/permisos.dart';
 import 'datos/admin_repository.dart';
 import 'datos/modelos.dart';
+import '../../shared/avisos_cambios.dart';
 
 class RepartosPage extends ConsumerStatefulWidget {
   const RepartosPage({super.key});
@@ -23,7 +24,13 @@ class _RepartosPageState extends ConsumerState<RepartosPage> {
   String _busqueda = '';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RecargaAutomatica(
+    temas: const {TemaCambio.repartos, TemaCambio.bultos},
+    alCambiar: () => ref.invalidate(repartosProvider),
+    child: _contenido(context),
+  );
+
+  Widget _contenido(BuildContext context) {
     final valor = ref.watch(repartosProvider(_dias));
 
     return Column(
@@ -168,7 +175,13 @@ class _RepartoDetallePageState extends ConsumerState<RepartoDetallePage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RecargaAutomatica(
+    temas: const {TemaCambio.repartos, TemaCambio.bultos},
+    alCambiar: _refrescar,
+    child: _contenido(context),
+  );
+
+  Widget _contenido(BuildContext context) {
     final tema = Theme.of(context);
     final sesion = ref.watch(sesionProvider);
     final puedeBorrar = sesion is SesionIniciada && sesion.perfil.puede(Permisos.datosEliminar);

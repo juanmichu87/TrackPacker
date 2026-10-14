@@ -90,17 +90,23 @@ class _PantallaLecturaUnicaState extends State<_PantallaLecturaUnica> {
 /// Cámara con recuadro de lectura, linterna, zoom y cambio de cámara.
 /// Llama a `alLeer` con cada código nuevo; el mismo código no se repite hasta
 /// pasados `pausaMismoCodigo` (la cámara lo ve muchas veces por segundo).
+///
+/// Con `disparoUnico`, el lector lee UNA etiqueta y se bloquea; se vuelve a
+/// activar con el botón «Escanear etiqueta» (o tocando la imagen). Así no se
+/// leen etiquetas sin querer ni salta el aviso de duplicado por releer la misma.
 class VistaEscaner extends StatefulWidget {
   const VistaEscaner({
     super.key,
     required this.alLeer,
     this.formatos,
     this.pausaMismoCodigo = const Duration(seconds: 2),
+    this.disparoUnico = false,
   });
 
   final void Function(LecturaCodigo lectura) alLeer;
   final List<String>? formatos;
   final Duration pausaMismoCodigo;
+  final bool disparoUnico;
 
   @override
   State<VistaEscaner> createState() => _VistaEscanerState();
@@ -121,6 +127,19 @@ class _VistaEscanerState extends State<VistaEscaner> {
   Timer? _temporizadorDestello;
   double _zoom = 0;
 
+  /// Con `disparoUnico`: el lector espera a que se pulse «Escanear etiqueta».
+  late bool _bloqueado = widget.disparoUnico;
+
+  /// Al reactivar, la etiqueta recién leída suele seguir delante de la cámara:
+  /// se ignora durante este tiempo para no dar un falso duplicado.
+  static const _ignorarAnterior = Duration(seconds: 3);
+  DateTime _activadoEn = DateTime(2000);
+
+  void _activar() => setState(() {
+    _bloqueado = false;
+    _activadoEn = DateTime.now();
+  });
+
   @override
   void dispose() {
     _temporizadorDestello?.cancel();
@@ -129,16 +148,25 @@ class _VistaEscanerState extends State<VistaEscaner> {
   }
 
   void _alDetectar(BarcodeCapture captura) {
+    if (_bloqueado) return;
     for (final codigo in captura.barcodes) {
       final valor = codigo.rawValue?.trim();
       if (valor == null || valor.isEmpty) continue;
 
       final ahora = DateTime.now();
       if (valor == _ultimo && ahora.difference(_ultimoEn) < widget.pausaMismoCodigo) continue;
+      if (widget.disparoUnico &&
+          valor == _ultimo &&
+          ahora.difference(_activadoEn) < _ignorarAnterior) {
+        continue;
+      }
       _ultimo = valor;
       _ultimoEn = ahora;
 
-      setState(() => _destello = true);
+      setState(() {
+        _destello = true;
+        if (widget.disparoUnico) _bloqueado = true;
+      });
       _temporizadorDestello?.cancel();
       _temporizadorDestello = Timer(const Duration(milliseconds: 350), () {
         if (mounted) setState(() => _destello = false);
@@ -169,6 +197,15 @@ class _VistaEscanerState extends State<VistaEscaner> {
       );
     }
 
+    // En el móvil girado la cámara del navegador deja de funcionar: se apaga
+    // (sin MobileScanner en pantalla la cámara se detiene) hasta volver a vertical.
+    if (context.esTelefonoEnHorizontal) {
+      return const _MensajeCamara(
+        icono: Icons.screen_rotation,
+        texto: 'Pon el móvil en vertical para escanear.\nEl lector se activará solo.',
+      );
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -185,16 +222,23 @@ class _VistaEscanerState extends State<VistaEscaner> {
         IgnorePointer(
           child: CustomPaint(painter: _MarcoLectura(destello: _destello)),
         ),
-        const Positioned(
+        Positioned(
           top: 16,
           left: 16,
           right: 16,
           child: Text(
-            'Coloca el código completo dentro del recuadro, en horizontal',
+            _bloqueado
+                ? 'Apunta a la etiqueta y pulsa «Escanear etiqueta»'
+                : 'Coloca el código completo dentro del recuadro, en horizontal',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, fontSize: 15, shadows: [Shadow(blurRadius: 4)]),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              shadows: [Shadow(blurRadius: 4)],
+            ),
           ),
         ),
+        if (_bloqueado) _BotonEscanear(alPulsar: _activar),
         Positioned(
           left: 8,
           right: 8,
@@ -204,6 +248,37 @@ class _VistaEscanerState extends State<VistaEscaner> {
       ],
     );
   }
+}
+
+/// Lector bloqueado: botón grande en el centro. Tocar cualquier parte de la
+/// imagen también lo activa (más fácil con guantes o con una mano).
+class _BotonEscanear extends StatelessWidget {
+  const _BotonEscanear({required this.alPulsar});
+
+  final VoidCallback alPulsar;
+
+  @override
+  Widget build(BuildContext context) => Positioned.fill(
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: alPulsar,
+      child: ColoredBox(
+        color: Colors.black38,
+        child: Center(
+          child: FilledButton.icon(
+            onPressed: alPulsar,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(240, 64),
+              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+            ),
+            icon: const Icon(Icons.qr_code_scanner, size: 28),
+            label: const Text('Escanear etiqueta'),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// Oscurece todo menos un recuadro horizontal (para códigos lineales).

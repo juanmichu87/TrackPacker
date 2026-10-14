@@ -9,6 +9,7 @@ import '../../shared/estados.dart';
 import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'datos/cliente_repository.dart';
+import '../../shared/avisos_cambios.dart';
 
 /// Periodos rápidos del filtro de fecha.
 enum Periodo {
@@ -257,7 +258,16 @@ class _ClienteInicioPageState extends ConsumerState<ClienteInicioPage> {
   );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RecargaAutomatica(
+    temas: const {TemaCambio.cliente},
+    alCambiar: () {
+      ref.invalidate(bultosClienteProvider);
+      ref.invalidate(incidenciasBultoProvider);
+    },
+    child: _contenido(context),
+  );
+
+  Widget _contenido(BuildContext context) {
     final tema = Theme.of(context);
     final filtro = _filtro;
     final valor = ref.watch(bultosClienteProvider(filtro));

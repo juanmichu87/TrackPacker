@@ -6,12 +6,19 @@ import '../../core/tema.dart';
 import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
+import '../../shared/avisos_cambios.dart';
 
 class ResumenPage extends ConsumerWidget {
   const ResumenPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context, WidgetRef ref) => RecargaAutomatica(
+    temas: const {TemaCambio.repartos, TemaCambio.bultos, TemaCambio.incidencias},
+    alCambiar: () => ref.invalidate(resumenProvider),
+    child: _contenido(context, ref),
+  );
+
+  Widget _contenido(BuildContext context, WidgetRef ref) {
     // Nombre visible de cada rol («repartidor» → «Repartidor»)
     final nombresRol = {
       for (final rol in ref.watch(rolesProvider).value ?? const []) rol.codigo: rol.nombre,
