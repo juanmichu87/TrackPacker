@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:track_pack/features/auth/sesion.dart';
 import 'package:track_pack/features/repartidor/datos/repartidor_repository.dart';
 import 'package:track_pack/features/repartidor/reparto_page.dart';
 
@@ -14,6 +15,11 @@ final _reparto = RepartoActivo(
   entregados: 0,
   pendientes: 2,
 );
+
+class _SesionFalsa extends SesionNotifier {
+  @override
+  EstadoSesion build() => const SinSesion();
+}
 
 class _RepoFalso implements RepartidorRepository {
   @override
@@ -40,7 +46,10 @@ Future<void> _pantalla(WidgetTester tester, Size tamano) async {
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [repartidorRepositoryProvider.overrideWithValue(_RepoFalso())],
+      overrides: [
+        repartidorRepositoryProvider.overrideWithValue(_RepoFalso()),
+        sesionProvider.overrideWith(_SesionFalsa.new),
+      ],
       child: MaterialApp(
         home: Scaffold(body: RepartoPage(reparto: _reparto)),
       ),

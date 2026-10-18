@@ -218,11 +218,13 @@ class AdminRepository {
 
   // --- Repartos --------------------------------------------------------------
 
+  /// Repartos del periodo y, además, los que siguen abiertos aunque
+  /// empezaran antes (un reparto de ayer sin cerrar debe verse en «Hoy»).
   Future<List<RepartoVista>> repartos({required DateTime desde}) async =>
       (await _db
               .from('v_repartos')
               .select()
-              .gte('iniciado_en', desde.toUtc().toIso8601String())
+              .or('iniciado_en.gte.${desde.toUtc().toIso8601String()},estado.in.(carga,en_ruta)')
               .order('iniciado_en', ascending: false)
               .limit(500))
           .map(RepartoVista.fromJson)

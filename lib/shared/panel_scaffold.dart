@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/sesion.dart';
 import 'aviso_esquema.dart';
 import 'responsive.dart';
+import 'ui.dart';
 
 /// Estructura común de las zonas con sesión: barra superior con el usuario y
 /// botón de cerrar sesión.
@@ -22,7 +23,7 @@ class PanelScaffold extends StatelessWidget {
   }
 }
 
-/// Nombre del usuario y botón de cerrar sesión, para la barra superior.
+/// Nombre del usuario y botón de ajustes (con cerrar sesión), para la barra superior.
 class AccionesUsuario extends ConsumerWidget {
   const AccionesUsuario({super.key});
 
@@ -40,12 +41,75 @@ class AccionesUsuario extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(nombre, overflow: TextOverflow.ellipsis),
           ),
-        IconButton(
-          tooltip: nombre.isEmpty ? 'Cerrar sesión' : 'Cerrar sesión ($nombre)',
-          icon: const Icon(Icons.logout),
-          onPressed: () => ref.read(sesionProvider.notifier).cerrarSesion(),
+        // Cerrar sesión va dentro de Ajustes (con confirmación) en todos los roles
+        const BotonAjustes(),
+      ],
+    );
+  }
+}
+
+/// Botón «Ajustes» (⚙) de todos los roles: despliega justo debajo un menú
+/// con el usuario y «Cerrar sesión», que pide confirmación. Así el cierre de
+/// sesión no está a un toque mientras se trabaja.
+class BotonAjustes extends ConsumerWidget {
+  const BotonAjustes({super.key});
+
+  Future<void> _cerrarSesion(BuildContext context, WidgetRef ref) async {
+    if (!await confirmar(
+      context,
+      titulo: 'Cerrar sesión',
+      mensaje: '¿Seguro que quieres cerrar sesión?',
+      accion: 'Cerrar sesión',
+      peligroso: true,
+    )) {
+      return;
+    }
+    await ref.read(sesionProvider.notifier).cerrarSesion();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tema = Theme.of(context);
+    final sesion = ref.watch(sesionProvider);
+    final perfil = sesion is SesionIniciada ? sesion.perfil : null;
+
+    return MenuAnchor(
+      menuChildren: [
+        if (perfil != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            child: Row(
+              children: [
+                const CircleAvatar(radius: 16, child: Icon(Icons.person_outline, size: 18)),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(perfil.nombreVisible, style: tema.textTheme.titleSmall),
+                    Text('Usuario: ${perfil.usuario}', style: tema.textTheme.bodySmall),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        const Divider(height: 1),
+        MenuItemButton(
+          style: MenuItemButton.styleFrom(
+            foregroundColor: tema.colorScheme.error,
+            minimumSize: const Size(220, 48),
+          ),
+          leadingIcon: Icon(Icons.logout, color: tema.colorScheme.error),
+          onPressed: () => _cerrarSesion(context, ref),
+          child: const Text('Cerrar sesión'),
         ),
       ],
+      builder: (context, menu, _) => IconButton(
+        tooltip: 'Ajustes',
+        isSelected: menu.isOpen,
+        icon: const Icon(Icons.settings_outlined),
+        selectedIcon: const Icon(Icons.settings),
+        onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+      ),
     );
   }
 }

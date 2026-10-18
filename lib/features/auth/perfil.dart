@@ -18,6 +18,24 @@ class Perfil {
   final String? clienteId;
   final Set<String> permisos;
 
+  factory Perfil.fromJson(Map<String, dynamic> j) => Perfil(
+    id: j['id'] as String,
+    usuario: j['usuario'] as String,
+    nombreCompleto: j['nombre_completo'] as String?,
+    rol: j['rol'] as String,
+    clienteId: j['cliente_id'] as String?,
+    permisos: {for (final p in (j['permisos'] as List? ?? const [])) p as String},
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'usuario': usuario,
+    'nombre_completo': nombreCompleto,
+    'rol': rol,
+    'cliente_id': clienteId,
+    'permisos': permisos.toList()..sort(),
+  };
+
   String get nombreVisible {
     final nombre = nombreCompleto?.trim() ?? '';
     return nombre.isEmpty ? usuario : nombre;

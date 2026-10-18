@@ -13,6 +13,9 @@ class RepartidorInicioPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Las rutas se piden a la vez que el reparto abierto (no después): si no
+    // hay reparto, la lista ya está cargada o a punto al mostrarse.
+    ref.listen(rutasRepartidorProvider, (_, _) {});
     return VistaAsync(
       valor: ref.watch(repartoAbiertoProvider),
       alReintentar: () => ref.invalidate(repartoAbiertoProvider),

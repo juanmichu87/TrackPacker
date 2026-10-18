@@ -6,6 +6,7 @@ import '../../core/formato.dart';
 import '../../core/salidas.dart';
 import '../../core/tema.dart';
 import '../../shared/estados.dart';
+import '../../shared/panel_scaffold.dart';
 import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'datos/repartidor_repository.dart';
@@ -91,6 +92,7 @@ class _SeleccionRutaState extends ConsumerState<SeleccionRuta> {
                       icon: const Icon(Icons.refresh),
                       onPressed: () => ref.invalidate(rutasRepartidorProvider),
                     ),
+                    const BotonAjustes(),
                   ],
                 ),
                 const SizedBox(height: 8),

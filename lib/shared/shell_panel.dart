@@ -39,6 +39,7 @@ class ShellPanel extends StatelessWidget {
     required this.ubicacion,
     required this.child,
     this.principalesMovil = 3,
+    this.conBarraSuperior = true,
   });
 
   /// Nombre del área bajo la marca del menú (p. ej. «Administración»).
@@ -50,6 +51,11 @@ class ShellPanel extends StatelessWidget {
   /// Secciones fijas en la barra inferior del móvil; el resto va en «Más».
   final int principalesMovil;
 
+  /// Sin barra superior (título y cerrar sesión), p. ej. el repartidor: más
+  /// sitio para trabajar y sin toques por error. La pantalla pone su propio
+  /// [BotonAjustes].
+  final bool conBarraSuperior;
+
   @override
   Widget build(BuildContext context) {
     final indice = indiceDeSeccion(secciones, ubicacion);
@@ -60,7 +66,9 @@ class ShellPanel extends StatelessWidget {
 
     void ir(int i) => context.go(secciones[i].ruta);
 
-    final barraSuperior = AppBar(title: Text(seccion.etiqueta), actions: const [AccionesUsuario()]);
+    final barraSuperior = conBarraSuperior
+        ? AppBar(title: Text(seccion.etiqueta), actions: const [AccionesUsuario()])
+        : null;
 
     switch (context.tamano) {
       case TamanoPantalla.escritorio:

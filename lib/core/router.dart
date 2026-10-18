@@ -62,6 +62,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           area: AreaApp.repartidor.titulo,
           secciones: seccionesRepartidor,
           ubicacion: estado.matchedLocation,
+          conBarraSuperior: false,
           child: child,
         ),
         routes: [_pagina(AreaApp.repartidor.ruta, (_) => const RepartidorInicioPage())],

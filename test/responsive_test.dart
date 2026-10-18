@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:track_pack/core/router.dart';
 import 'package:track_pack/features/auth/sesion.dart';
+import 'package:track_pack/shared/panel_scaffold.dart';
 import 'package:track_pack/shared/responsive.dart';
 import 'package:track_pack/shared/shell_panel.dart';
 
@@ -42,6 +43,42 @@ void main() {
     expect(RejillaAdaptable.columnasPara(760, 340, 3, 12), 2);
     expect(RejillaAdaptable.columnasPara(1200, 340, 3, 12), 3);
     expect(RejillaAdaptable.columnasPara(100, 340, 3, 12), 1); // nunca menos de 1
+  });
+
+  testWidgets('ajustes: el cierre de sesión se despliega junto al botón', (tester) async {
+    await _pantalla(
+      tester,
+      const Size(390, 844),
+      const Scaffold(
+        body: Align(alignment: Alignment.topRight, child: BotonAjustes()),
+      ),
+    );
+    expect(find.text('Cerrar sesión'), findsNothing);
+    await tester.tap(find.byTooltip('Ajustes'));
+    await tester.pumpAndSettle();
+
+    final boton = tester.getRect(find.byTooltip('Ajustes'));
+    final opcion = tester.getRect(find.text('Cerrar sesión'));
+    expect(opcion.top - boton.bottom, lessThan(80)); // justo debajo, sin desplazarse
+    expect(find.byType(BottomSheet), findsNothing);
+  });
+
+  testWidgets('repartidor: sin barra superior ni botón de cerrar sesión a la vista', (
+    tester,
+  ) async {
+    await _pantalla(
+      tester,
+      const Size(390, 844),
+      const ShellPanel(
+        area: 'Reparto',
+        secciones: seccionesRepartidor,
+        ubicacion: '/repartidor',
+        conBarraSuperior: false,
+        child: SizedBox(),
+      ),
+    );
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byIcon(Icons.logout), findsNothing);
   });
 
   testWidgets('repartidor en el móvil: sin barra de navegación (una sola sección)', (tester) async {

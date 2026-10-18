@@ -12,7 +12,7 @@ const seccionesAdmin = [
   SeccionPanel('/admin/rutas', 'Rutas', Icons.alt_route),
   SeccionPanel('/admin/tiendas', 'Tiendas', Icons.storefront_outlined),
   SeccionPanel('/admin/areas', 'Áreas', Icons.map_outlined),
-  SeccionPanel('/admin/ajustes', 'Ajustes', Icons.settings_outlined),
+  SeccionPanel('/admin/ajustes', 'Configuración', Icons.tune),
 ];
 
 /// Sección activa del panel de administración.

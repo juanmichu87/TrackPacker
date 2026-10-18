@@ -101,12 +101,18 @@ class VistaEscaner extends StatefulWidget {
     this.formatos,
     this.pausaMismoCodigo = const Duration(seconds: 2),
     this.disparoUnico = false,
+    this.aceptar,
   });
 
   final void Function(LecturaCodigo lectura) alLeer;
   final List<String>? formatos;
   final Duration pausaMismoCodigo;
   final bool disparoUnico;
+
+  /// Filtro de códigos válidos (p. ej. las reglas de los clientes). Las
+  /// etiquetas suelen llevar varios códigos de barras: los que no valen se
+  /// ignoran y el lector sigue buscando el del bulto, sin dar error.
+  final bool Function(String valor)? aceptar;
 
   @override
   State<VistaEscaner> createState() => _VistaEscanerState();
@@ -135,6 +141,18 @@ class _VistaEscanerState extends State<VistaEscaner> {
   static const _ignorarAnterior = Duration(seconds: 3);
   DateTime _activadoEn = DateTime(2000);
 
+  /// La cámara está viendo un código que no es el del bulto (aviso temporal).
+  bool _otroCodigo = false;
+  Timer? _temporizadorOtro;
+
+  void _avisarOtroCodigo() {
+    _temporizadorOtro?.cancel();
+    _temporizadorOtro = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _otroCodigo = false);
+    });
+    if (!_otroCodigo) setState(() => _otroCodigo = true);
+  }
+
   void _activar() => setState(() {
     _bloqueado = false;
     _activadoEn = DateTime.now();
@@ -143,6 +161,7 @@ class _VistaEscanerState extends State<VistaEscaner> {
   @override
   void dispose() {
     _temporizadorDestello?.cancel();
+    _temporizadorOtro?.cancel();
     _controlador.dispose();
     super.dispose();
   }
@@ -152,6 +171,10 @@ class _VistaEscanerState extends State<VistaEscaner> {
     for (final codigo in captura.barcodes) {
       final valor = codigo.rawValue?.trim();
       if (valor == null || valor.isEmpty) continue;
+      if (widget.aceptar case final aceptar? when !aceptar(valor)) {
+        _avisarOtroCodigo();
+        continue;
+      }
 
       final ahora = DateTime.now();
       if (valor == _ultimo && ahora.difference(_ultimoEn) < widget.pausaMismoCodigo) continue;
@@ -229,6 +252,8 @@ class _VistaEscanerState extends State<VistaEscaner> {
           child: Text(
             _bloqueado
                 ? 'Apunta a la etiqueta y pulsa «Escanear etiqueta»'
+                : _otroCodigo
+                ? 'Ese código no es el del bulto: apunta al código de barras del ID'
                 : 'Coloca el código completo dentro del recuadro, en horizontal',
             textAlign: TextAlign.center,
             style: const TextStyle(
@@ -238,7 +263,17 @@ class _VistaEscanerState extends State<VistaEscaner> {
             ),
           ),
         ),
-        if (_bloqueado) _BotonEscanear(alPulsar: _activar),
+        // Sin cámara (permiso denegado, etc.) el botón taparía el mensaje que
+        // explica cómo arreglarlo: se usa la entrada manual
+        if (_bloqueado)
+          Positioned.fill(
+            child: ValueListenableBuilder(
+              valueListenable: _controlador,
+              builder: (context, estado, _) => estado.error != null
+                  ? const SizedBox.shrink()
+                  : _BotonEscanear(alPulsar: _activar),
+            ),
+          ),
         Positioned(
           left: 8,
           right: 8,
@@ -258,7 +293,7 @@ class _BotonEscanear extends StatelessWidget {
   final VoidCallback alPulsar;
 
   @override
-  Widget build(BuildContext context) => Positioned.fill(
+  Widget build(BuildContext context) => SizedBox.expand(
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: alPulsar,

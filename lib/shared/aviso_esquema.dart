@@ -5,10 +5,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config.dart';
 import '../core/supabase.dart';
 import '../core/tema.dart';
+import '../features/auth/sesion.dart';
 
 /// Versión del esquema de la base de datos (0 si es anterior a la migración 07,
 /// que creó la columna). La pueden leer todos los usuarios activos.
 final versionEsquemaProvider = FutureProvider<int>((ref) async {
+  // Normalmente llega junto al perfil (una consulta menos al entrar)
+  if (ref.watch(sesionProvider) case SesionIniciada(versionEsquema: final version?)) {
+    return version;
+  }
   try {
     final fila = await ref
         .watch(supabaseProvider)

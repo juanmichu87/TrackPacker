@@ -244,9 +244,17 @@ class _ClienteInicioPageState extends ConsumerState<ClienteInicioPage> {
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: ChoiceChip(
+              // En el móvil, compactos para que quepan los cinco sin desplazar
+              visualDensity: context.esPantallaMovil ? VisualDensity.compact : null,
+              labelPadding: context.esPantallaMovil
+                  ? const EdgeInsets.symmetric(horizontal: 2)
+                  : null,
+              avatar: p == Periodo.rango ? const Icon(Icons.date_range, size: 18) : null,
               label: Text(
                 p == Periodo.rango && _periodo == Periodo.rango && _rango != null
                     ? '${fecha(_rango!.start)} – ${fecha(_rango!.end)}'
+                    : p == Periodo.rango && context.esPantallaMovil
+                    ? 'Fechas'
                     : p.texto,
               ),
               selected: _periodo == p,
@@ -305,7 +313,7 @@ class _ClienteInicioPageState extends ConsumerState<ClienteInicioPage> {
         runSpacing: 10,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          SizedBox(width: 240, child: _buscador),
+          SizedBox(width: 300, child: _buscador),
           _periodos,
           ..._desplegables(tiendas, () {}),
           IconButton(tooltip: 'Actualizar', icon: const Icon(Icons.refresh), onPressed: actualizar),

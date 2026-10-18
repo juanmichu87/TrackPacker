@@ -8,6 +8,7 @@ import '../../core/formato.dart';
 import '../../core/tema.dart';
 import '../../shared/escaner.dart';
 import '../../shared/estados.dart';
+import '../../shared/panel_scaffold.dart';
 import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'aviso_lectura.dart';
@@ -207,6 +208,7 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
       formatos: formatosDeReglas(widget.datos.reglas),
       alLeer: _leido,
       disparoUnico: true,
+      aceptar: (v) => extraerIdConReglas(v, widget.datos.reglas) is IdValido,
     );
     final lista = _ListaBultos(
       titulo: 'Bultos cargados',
@@ -230,6 +232,7 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
       cabecera: _Cabecera(
         titulo: _reparto.titulo,
         detalle: 'Carga en la nave',
+        ajustes: true,
         contador: widget.bultos.length,
         etiquetaContador: 'cargados',
         tema: tema,
@@ -327,6 +330,7 @@ class _VistaEnRutaState extends ConsumerState<_VistaEnRuta> {
         _Cabecera(
           titulo: datos.reparto.titulo,
           detalle: 'En ruta · $entregados de ${cantidad(total, 'entregado')}',
+          ajustes: true,
           contador: pendientes,
           etiquetaContador: 'pendientes',
           tema: tema,
@@ -713,6 +717,7 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
         formatos: formatosDeReglas(widget.datos.reglas),
         alLeer: _leido,
         disparoUnico: true,
+        aceptar: (v) => extraerIdConReglas(v, widget.datos.reglas) is IdValido,
       ),
       aviso: FranjaAviso(_aviso),
       lista: _devolucion
@@ -977,6 +982,7 @@ class _Cabecera extends StatelessWidget {
     required this.contador,
     required this.etiquetaContador,
     required this.tema,
+    this.ajustes = false,
   });
 
   final String titulo;
@@ -984,6 +990,9 @@ class _Cabecera extends StatelessWidget {
   final int contador;
   final String etiquetaContador;
   final ThemeData tema;
+
+  /// Muestra el botón de ajustes (cerrar sesión) a la izquierda del recuento.
+  final bool ajustes;
 
   @override
   Widget build(BuildContext context) {
@@ -1015,6 +1024,7 @@ class _Cabecera extends StatelessWidget {
                 Text(etiquetaContador, style: tema.textTheme.bodySmall),
               ],
             ),
+            if (ajustes) ...[const SizedBox(width: 4), const BotonAjustes()],
           ],
         ),
       ),

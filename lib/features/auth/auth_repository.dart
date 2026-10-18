@@ -25,6 +25,23 @@ class AuthRepository {
 
   Future<void> cerrarSesion() => _client.auth.signOut();
 
+  /// Perfil, permisos y versión del esquema en una sola llamada (migración 12).
+  /// `perfil` es null si no tiene perfil o está desactivado.
+  Future<({Perfil? perfil, int? versionEsquema})> cargarInicio(String userId) async {
+    try {
+      final datos = Map<String, dynamic>.from(await _client.rpc('mi_inicio') as Map);
+      final fila = datos['perfil'] as Map<String, dynamic>?;
+      return (
+        perfil: fila == null || fila['activo'] != true ? null : Perfil.fromJson(fila),
+        versionEsquema: (datos['version_esquema'] as num?)?.toInt(),
+      );
+    } on PostgrestException catch (e) {
+      // Base de datos sin la migración 12: consulta anterior
+      if (e.code != 'PGRST202') rethrow;
+      return (perfil: await cargarPerfil(userId), versionEsquema: null);
+    }
+  }
+
   /// Perfil y permisos del usuario en una sola consulta (los permisos llegan
   /// embebidos a través de su rol). Null si no tiene perfil o está desactivado.
   Future<Perfil?> cargarPerfil(String userId) async {
