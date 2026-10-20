@@ -240,7 +240,12 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
       escaner: escaner,
       aviso: FranjaAviso(_aviso),
       lista: lista,
-      entradaManual: EntradaManual(alEnviar: (t) => _leido(LecturaCodigo(t, null))),
+      entradaManual: EntradaManual(
+        alEnviar: (t) => _leido(LecturaCodigo(t, null)),
+        alLeerFoto: _leido,
+        formatos: formatosDeReglas(widget.datos.reglas),
+        aceptar: (v) => extraerIdConReglas(v, widget.datos.reglas) is IdValido,
+      ),
       pie: pie,
     );
   }
@@ -592,6 +597,23 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
     }
   }
 
+  /// Último recurso si ni la cámara ni la foto leen la etiqueta: se marca
+  /// desde la lista del camión, con confirmación.
+  Future<void> _entregarAMano(BultoReparto b) async {
+    if (!await confirmar(
+      context,
+      titulo: 'Entregar sin escanear',
+      mensaje:
+          '¿Marcar ${b.codigo} como entregado en ${widget.tienda.nombre}?\n\n'
+          'Úsalo solo si el lector no consigue leer la etiqueta. Comprueba que el '
+          'código coincide con el del bulto.',
+      accion: 'Marcar entregado',
+    )) {
+      return;
+    }
+    _cola.encolar(() => _entregar(LecturaCodigo(b.codigo, null)));
+  }
+
   Future<void> _entregar(LecturaCodigo lectura) async {
     final codigo = _codigoValido(lectura);
     if (codigo == null) return;
@@ -731,13 +753,18 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
               alQuitar: _quitarDevolucion,
               textoQuitar: 'Quitar de devoluciones',
             )
-          : _ListaBultos(
+          : _ListaEntrega(
               key: const ValueKey('entregados'),
-              titulo: 'Entregados en esta tienda',
-              bultos: entregadosAqui,
-              vacio: 'Escanea cada bulto al descargarlo para marcarlo como entregado.',
+              entregados: entregadosAqui,
+              enCamion: widget.bultos.where((b) => b.estado == 'cargado').toList(),
+              alEntregarAMano: _entregarAMano,
             ),
-      entradaManual: EntradaManual(alEnviar: (t) => _leido(LecturaCodigo(t, null))),
+      entradaManual: EntradaManual(
+        alEnviar: (t) => _leido(LecturaCodigo(t, null)),
+        alLeerFoto: _leido,
+        formatos: formatosDeReglas(widget.datos.reglas),
+        aceptar: (v) => extraerIdConReglas(v, widget.datos.reglas) is IdValido,
+      ),
       pie: _BarraAcciones(
         children: [
           Expanded(
@@ -1083,6 +1110,66 @@ class _ListaBultos extends StatelessWidget {
                 ),
         );
       },
+    );
+  }
+}
+
+/// Lista de la entrega en una tienda: lo entregado aquí y, debajo, lo que
+/// queda en el camión con un botón para entregarlo a mano si no se puede leer.
+class _ListaEntrega extends StatelessWidget {
+  const _ListaEntrega({
+    super.key,
+    required this.entregados,
+    required this.enCamion,
+    required this.alEntregarAMano,
+  });
+
+  final List<BultoReparto> entregados;
+  final List<BultoReparto> enCamion;
+  final void Function(BultoReparto) alEntregarAMano;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    Widget titulo(String texto) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(texto, style: tema.textTheme.titleSmall),
+    );
+    Widget fila(BultoReparto b, Widget final_) => ListTile(
+      dense: true,
+      leading: const Icon(Icons.inventory_2_outlined),
+      title: Text(
+        b.codigo,
+        style: const TextStyle(fontSize: 16, fontFeatures: [FontFeature.tabularFigures()]),
+      ),
+      subtitle: Text(fechaHora(b.entregadoEn ?? b.cargadoEn).substring(11)),
+      trailing: final_,
+    );
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 8),
+      children: [
+        titulo('Entregados en esta tienda (${entregados.length})'),
+        if (entregados.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Text('Escanea cada bulto al descargarlo para marcarlo como entregado.'),
+          ),
+        for (final b in entregados) fila(b, EtiquetaBulto(b.estado)),
+        if (enCamion.isNotEmpty) ...[
+          const Divider(height: 24),
+          titulo('Quedan en el camión (${enCamion.length})'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Text(
+              'Si una etiqueta no se puede leer ni con foto, márcala aquí.',
+              style: tema.textTheme.bodySmall,
+            ),
+          ),
+          for (final b in enCamion)
+            fila(b, TextButton(onPressed: () => alEntregarAMano(b), child: const Text('Entregar'))),
+        ],
+      ],
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config.dart';
+import 'core/plataforma/plataforma.dart';
 import 'core/preferencias.dart';
 
 Future<void> main() async {
@@ -14,6 +15,7 @@ Future<void> main() async {
   usePathUrlStrategy();
 
   if (!Config.completa) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => quitarPantallaCarga());
     runApp(const ConfigFaltanteApp());
     return;
   }
@@ -25,6 +27,8 @@ Future<void> main() async {
   } catch (_) {
     // Sin almacén local (p. ej. navegación privada estricta): sin caché de perfil
   }
+  // La pantalla de carga de index.html se quita en cuanto la app se dibuja
+  WidgetsBinding.instance.addPostFrameCallback((_) => quitarPantallaCarga());
   runApp(
     ProviderScope(
       overrides: [preferenciasProvider.overrideWithValue(preferencias)],

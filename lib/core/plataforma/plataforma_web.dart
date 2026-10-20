@@ -4,6 +4,13 @@ import 'dart:js_interop';
 import 'package:image_picker/image_picker.dart';
 import 'package:web/web.dart' as web;
 
+/// Quita la pantalla de carga de index.html (la app ya se ve).
+void quitarPantallaCarga() {
+  try {
+    web.document.getElementById('carga')?.remove();
+  } catch (_) {}
+}
+
 /// Vibración corta (lectura correcta) o larga (error o duplicado). Los
 /// navegadores que no la admiten (p. ej. Safari en iPhone) la ignoran.
 void vibrar({bool larga = false}) {

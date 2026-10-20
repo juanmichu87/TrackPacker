@@ -93,11 +93,24 @@ class SalidasRuta extends ConsumerWidget {
                 itemBuilder: (context, i) {
                   final s = salidas[i];
                   final incluidas = s.tiendaIds.where(idsRuta.contains).length;
+                  // Salida sin tiendas: el repartidor no podría entregar nada.
+                  // Pasa si se quitan de la ruta las tiendas que tenía.
+                  final vacia = incluidas == 0;
                   return ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.schedule)),
+                    leading: CircleAvatar(
+                      backgroundColor: vacia ? ColoresEstado.peligro.withValues(alpha: 0.12) : null,
+                      child: Icon(
+                        vacia ? Icons.warning_amber_rounded : Icons.schedule,
+                        color: vacia ? ColoresEstado.peligro : null,
+                      ),
+                    ),
                     title: Text('${s.nombre} · empieza ${s.franja}'),
                     subtitle: Text(
-                      '${textoDias(s.dias)} · $incluidas de ${tiendas.length} tiendas',
+                      vacia
+                          ? '${textoDias(s.dias)} · SIN TIENDAS: el repartidor no podrá entregar. '
+                                'Edítala y elige sus tiendas.'
+                          : '${textoDias(s.dias)} · $incluidas de ${tiendas.length} tiendas',
+                      style: vacia ? const TextStyle(color: ColoresEstado.peligro) : null,
                     ),
                     onTap: () => _editar(context, ref, s),
                     trailing: Row(

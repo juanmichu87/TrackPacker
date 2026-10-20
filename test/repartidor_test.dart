@@ -75,6 +75,15 @@ void main() {
     expect(find.text('Terminar tienda'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
 
+    // Si la etiqueta no se puede leer: lo que queda en el camión se entrega a mano
+    expect(find.text('Quedan en el camión (2)'), findsOneWidget);
+    expect(find.byTooltip('Leer desde foto'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Entregar').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Entregar sin escanear'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
     // En la tienda se pueden recoger devoluciones
     await tester.tap(find.text('Devoluciones (0)'));
     await tester.pump();

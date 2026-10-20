@@ -33,8 +33,41 @@
 
   <title>TrackPack</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Descargas en paralelo desde el primer momento (antes esperaban a que
+       terminara de cargar la anterior) -->
+  <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="assets/FontManifest.json" as="fetch" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Pantalla de carga: se ve al instante (sin esperar a la app) y la quita
+       la app al dibujar su primera pantalla -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #ffffff; }
+    #carga {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #111111; background: #ffffff; z-index: 10;
+    }
+    #carga .marca { font-size: 26px; font-weight: 600; letter-spacing: .3px; }
+    #carga .rueda {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 4px solid #f5c6c4; border-top-color: #E10600;
+      animation: girar .8s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
+  <div id="carga" aria-label="Cargando TrackPack">
+    <svg width="56" height="56" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#E10600" d="M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-1 18H5V9h14v11zm1-13H4V4h16v3zM9 12h6v2H9z"/>
+    </svg>
+    <div class="marca">TrackPack</div>
+    <div class="rueda"></div>
+  </div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

@@ -4,6 +4,9 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../codigos.dart';
 
+/// En Android/iOS no hay pantalla de carga en HTML.
+void quitarPantallaCarga() {}
+
 /// Vibración corta (lectura correcta) o larga (error o duplicado).
 void vibrar({bool larga = false}) {
   larga ? HapticFeedback.heavyImpact() : HapticFeedback.mediumImpact();

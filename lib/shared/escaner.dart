@@ -143,14 +143,21 @@ class _VistaEscanerState extends State<VistaEscaner> {
 
   /// La cámara está viendo un código que no es el del bulto (aviso temporal).
   bool _otroCodigo = false;
+  String _otroValor = '';
   Timer? _temporizadorOtro;
 
-  void _avisarOtroCodigo() {
+  void _avisarOtroCodigo(String valor) {
+    final texto = valor.length > 24 ? '${valor.substring(0, 24)}…' : valor;
     _temporizadorOtro?.cancel();
     _temporizadorOtro = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _otroCodigo = false);
     });
-    if (!_otroCodigo) setState(() => _otroCodigo = true);
+    if (!_otroCodigo || texto != _otroValor) {
+      setState(() {
+        _otroCodigo = true;
+        _otroValor = texto;
+      });
+    }
   }
 
   void _activar() => setState(() {
@@ -172,7 +179,7 @@ class _VistaEscanerState extends State<VistaEscaner> {
       final valor = codigo.rawValue?.trim();
       if (valor == null || valor.isEmpty) continue;
       if (widget.aceptar case final aceptar? when !aceptar(valor)) {
-        _avisarOtroCodigo();
+        _avisarOtroCodigo(valor);
         continue;
       }
 
@@ -253,7 +260,7 @@ class _VistaEscanerState extends State<VistaEscaner> {
             _bloqueado
                 ? 'Apunta a la etiqueta y pulsa «Escanear etiqueta»'
                 : _otroCodigo
-                ? 'Ese código no es el del bulto: apunta al código de barras del ID'
+                ? 'Leído «$_otroValor»: no es el código del bulto. Apunta al código del ID'
                 : 'Coloca el código completo dentro del recuadro, en horizontal',
             textAlign: TextAlign.center,
             style: const TextStyle(
@@ -397,6 +404,93 @@ class _Controles extends StatelessWidget {
 
 /// Botones para leer el código desde una foto: la cámara del móvil enfoca y
 /// usa toda su resolución, así que lee códigos que en vídeo cuestan.
+/// Hace (o elige) una foto, busca los códigos de barras y devuelve el del
+/// bulto. Con `aceptar` se descartan los códigos que no son el del bulto (la
+/// etiqueta suele llevar varios); si quedan varios, se pregunta cuál.
+/// `alAnalizar` avisa de cuándo empieza y termina el análisis (para la rueda).
+Future<LecturaCodigo?> leerCodigoDeFoto(
+  BuildContext context, {
+  ImageSource origen = ImageSource.camera,
+  List<String>? formatos,
+  bool Function(String valor)? aceptar,
+  void Function(bool analizando)? alAnalizar,
+}) async {
+  final mensajero = ScaffoldMessenger.of(context);
+  void avisar(String texto) => mensajero
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(texto), behavior: SnackBarBehavior.floating));
+
+  final XFile? foto;
+  try {
+    foto = await ImagePicker().pickImage(source: origen, maxWidth: 2400, imageQuality: 95);
+  } catch (_) {
+    avisar('No se pudo abrir la cámara o la galería.');
+    return null;
+  }
+  if (foto == null || !context.mounted) return null;
+
+  alAnalizar?.call(true);
+  try {
+    var codigos = await leerCodigosDeFoto(foto, formatos: formatos);
+    if (!context.mounted) return null;
+    if (aceptar != null) {
+      final validos = [
+        for (final c in codigos)
+          if (aceptar(c.contenido)) c,
+      ];
+      if (codigos.isNotEmpty && validos.isEmpty) {
+        vibrar(larga: true);
+        avisar(
+          'La foto tiene ${codigos.length == 1 ? 'un código' : 'códigos'}, pero ninguno es el del '
+          'bulto (${codigos.first.contenido}). Haz la foto al código de barras del ID.',
+        );
+        return null;
+      }
+      codigos = validos;
+    }
+    if (codigos.isEmpty) {
+      vibrar(larga: true);
+      avisar(
+        'No se encontró ningún código en la foto. Haz la foto más cerca, '
+        'enfocada y con el código entero.',
+      );
+      return null;
+    }
+    final elegido = codigos.length == 1 ? codigos.first : await _elegirCodigo(context, codigos);
+    return elegido == null ? null : LecturaCodigo(elegido.contenido, elegido.formato);
+  } catch (e) {
+    avisar(e is StateError ? e.message : 'No se pudo analizar la foto.');
+    return null;
+  } finally {
+    alAnalizar?.call(false);
+  }
+}
+
+/// Si la foto tiene varios códigos (p. ej. una etiqueta con dos), se elige uno.
+Future<({String contenido, String? formato})?> _elegirCodigo(
+  BuildContext context,
+  List<({String contenido, String? formato})> codigos,
+) => mostrarPanel(
+  context,
+  builder: (hoja) => SafeArea(
+    child: ListView(
+      shrinkWrap: true,
+      children: [
+        const ListTile(title: Text('La foto tiene varios códigos. ¿Cuál es el del bulto?')),
+        for (final c in codigos)
+          ListTile(
+            leading: const Icon(Icons.qr_code_2),
+            title: Text(c.contenido),
+            subtitle: Text(
+              c.formato == null ? 'Formato desconocido' : formatosCodigo[c.formato] ?? c.formato!,
+            ),
+            onTap: () => Navigator.pop(hoja, c),
+          ),
+      ],
+    ),
+  ),
+);
+
 class LeerDeFoto extends StatefulWidget {
   const LeerDeFoto({super.key, required this.alLeer, this.formatos});
 
@@ -411,64 +505,16 @@ class _LeerDeFotoState extends State<LeerDeFoto> {
   bool _analizando = false;
 
   Future<void> _leer(ImageSource origen) async {
-    final mensajero = ScaffoldMessenger.of(context);
-    void avisar(String texto) => mensajero
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(texto), behavior: SnackBarBehavior.floating));
-
-    final XFile? foto;
-    try {
-      foto = await ImagePicker().pickImage(source: origen, maxWidth: 2400, imageQuality: 95);
-    } catch (_) {
-      avisar('No se pudo abrir la cámara o la galería.');
-      return;
-    }
-    if (foto == null || !mounted) return;
-
-    setState(() => _analizando = true);
-    try {
-      final codigos = await leerCodigosDeFoto(foto, formatos: widget.formatos);
-      if (!mounted) return;
-      if (codigos.isEmpty) {
-        vibrar(larga: true);
-        avisar(
-          'No se encontró ningún código en la foto. Haz la foto más cerca, '
-          'enfocada y con el código entero.',
-        );
-        return;
-      }
-      final elegido = codigos.length == 1 ? codigos.first : await _elegir(codigos);
-      if (elegido != null) widget.alLeer(LecturaCodigo(elegido.contenido, elegido.formato));
-    } catch (e) {
-      avisar(e is StateError ? e.message : 'No se pudo analizar la foto.');
-    } finally {
-      if (mounted) setState(() => _analizando = false);
-    }
+    final lectura = await leerCodigoDeFoto(
+      context,
+      origen: origen,
+      formatos: widget.formatos,
+      alAnalizar: (v) {
+        if (mounted) setState(() => _analizando = v);
+      },
+    );
+    if (lectura != null) widget.alLeer(lectura);
   }
-
-  /// Si la foto tiene varios códigos (p. ej. una etiqueta con dos), se elige uno.
-  Future<({String contenido, String? formato})?> _elegir(
-    List<({String contenido, String? formato})> codigos,
-  ) => mostrarPanel(
-    context,
-    builder: (hoja) => SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          const ListTile(title: Text('La foto tiene varios códigos. ¿Cuál es el del bulto?')),
-          for (final c in codigos)
-            ListTile(
-              leading: const Icon(Icons.qr_code_2),
-              title: Text(c.contenido),
-              subtitle: Text(
-                c.formato == null ? 'Formato desconocido' : formatosCodigo[c.formato] ?? c.formato!,
-              ),
-              onTap: () => Navigator.pop(hoja, c),
-            ),
-        ],
-      ),
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
@@ -512,9 +558,21 @@ class _LeerDeFotoState extends State<LeerDeFoto> {
 /// Campo para escribir el código a mano o con un lector de pistola (que
 /// funciona como un teclado: escribe el código y pulsa Intro).
 class EntradaManual extends StatefulWidget {
-  const EntradaManual({super.key, required this.alEnviar});
+  const EntradaManual({
+    super.key,
+    required this.alEnviar,
+    this.alLeerFoto,
+    this.formatos,
+    this.aceptar,
+  });
 
   final ValueChanged<String> alEnviar;
+
+  /// Si se da, aparece un botón de cámara para leer el código desde una foto
+  /// (la foto enfoca mejor que el vídeo: lee etiquetas que en vivo cuestan).
+  final void Function(LecturaCodigo lectura)? alLeerFoto;
+  final List<String>? formatos;
+  final bool Function(String valor)? aceptar;
 
   @override
   State<EntradaManual> createState() => _EntradaManualState();
@@ -523,6 +581,19 @@ class EntradaManual extends StatefulWidget {
 class _EntradaManualState extends State<EntradaManual> {
   final _texto = TextEditingController();
   final _foco = FocusNode();
+  bool _analizando = false;
+
+  Future<void> _foto() async {
+    final lectura = await leerCodigoDeFoto(
+      context,
+      formatos: widget.formatos,
+      aceptar: widget.aceptar,
+      alAnalizar: (v) {
+        if (mounted) setState(() => _analizando = v);
+      },
+    );
+    if (lectura != null) widget.alLeerFoto!(lectura);
+  }
 
   @override
   void dispose() {
@@ -548,6 +619,22 @@ class _EntradaManualState extends State<EntradaManual> {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
+            if (widget.alLeerFoto != null) ...[
+              _analizando
+                  ? const SizedBox.square(
+                      dimension: 40,
+                      child: Padding(
+                        padding: EdgeInsets.all(10),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton.filledTonal(
+                      tooltip: 'Leer desde foto',
+                      onPressed: _foto,
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                    ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: TextField(
                 controller: _texto,
