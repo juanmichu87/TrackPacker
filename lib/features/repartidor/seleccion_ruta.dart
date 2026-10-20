@@ -33,10 +33,9 @@ class _SeleccionRutaState extends ConsumerState<SeleccionRuta> {
           context,
           titulo: 'Ruta ocupada',
           mensaje:
-              '${ruta.ocupadaPor ?? 'Otro repartidor'} ya está con «${ruta.nombre}» '
-              '(${textoEstadoReparto(ruta.ocupadaEstado!).toLowerCase()} desde las '
-              '${horaDe(ruta.ocupadaDesde!)}).\n\n¿Quieres empezarla tú también, por ejemplo '
-              'como apoyo?',
+              '${ruta.ocupadaPor ?? 'Otro repartidor'} ya está con «${ruta.nombre}»'
+              '${_detalleOcupada(ruta).isEmpty ? '' : ' (${_detalleOcupada(ruta)})'}.'
+              '\n\n¿Quieres empezarla tú también, por ejemplo como apoyo?',
           accion: 'Continuar',
         )) {
       return;
@@ -126,9 +125,10 @@ class _SeleccionRutaState extends ConsumerState<SeleccionRuta> {
                               ),
                               if (r.ocupada)
                                 Text(
-                                  'Ocupada por ${r.ocupadaPor ?? 'otro repartidor'} · '
-                                  '${textoEstadoReparto(r.ocupadaEstado!).toLowerCase()} desde las '
-                                  '${horaDe(r.ocupadaDesde!)}',
+                                  [
+                                    'Ocupada por ${r.ocupadaPor ?? 'otro repartidor'}',
+                                    if (_detalleOcupada(r).isNotEmpty) _detalleOcupada(r),
+                                  ].join(' · '),
                                   style: const TextStyle(
                                     color: ColoresEstado.peligro,
                                     fontWeight: FontWeight.w600,
@@ -218,3 +218,9 @@ class _SelectorSalida extends StatelessWidget {
 
 /// "07:12" en hora local.
 String horaDe(DateTime momento) => fechaHora(momento).substring(11);
+
+/// «en ruta desde las 13:05»; sin estado u hora, lo que se sepa.
+String _detalleOcupada(RutaRepartidor r) => [
+  if (r.ocupadaEstado case final estado?) textoEstadoReparto(estado).toLowerCase(),
+  if (r.ocupadaDesde case final desde?) 'desde las ${horaDe(desde)}',
+].join(' ');

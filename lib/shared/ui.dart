@@ -30,21 +30,24 @@ Future<T?> mostrarPanel<T>(
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: anchoMaximo),
-        child: Stack(
+        // El botón de cerrar va en su propia franja: así no tapa lo que haya
+        // arriba a la derecha del contenido (p. ej. la etiqueta de estado)
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.only(top: 20),
-              child: builder(contexto),
-            ),
-            Positioned(
-              top: 4,
-              right: 4,
-              child: IconButton(
-                tooltip: 'Cerrar',
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(contexto),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 4, 4, 0),
+                child: IconButton(
+                  tooltip: 'Cerrar',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(contexto),
+                ),
               ),
             ),
+            Flexible(child: SingleChildScrollView(child: builder(contexto))),
           ],
         ),
       ),

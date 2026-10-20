@@ -433,23 +433,31 @@ class _FilaTienda extends StatelessWidget {
         selected: seleccionada,
         leading: CircleAvatar(child: Text('$numero')),
         title: Text(tienda.nombre, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: (tienda.direccion?.isNotEmpty ?? false) ? Text(tienda.direccion!) : null,
-        trailing: entregados + devoluciones == 0
-            ? const Icon(Icons.chevron_right)
-            : Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                alignment: WrapAlignment.end,
-                children: [
-                  if (entregados > 0)
-                    Etiqueta(cantidad(entregados, 'entregado'), color: ColoresEstado.correcto),
-                  if (devoluciones > 0)
-                    Etiqueta(
-                      cantidad(devoluciones, 'devolución', 'devoluciones'),
-                      color: ColoresEstado.aviso,
-                    ),
-                ],
+        // El recuento va bajo el nombre: a la derecha lo aplastaba en el móvil
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (tienda.direccion?.isNotEmpty ?? false) Text(tienda.direccion!),
+            if (entregados + devoluciones > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    if (entregados > 0)
+                      Etiqueta(cantidad(entregados, 'entregado'), color: ColoresEstado.correcto),
+                    if (devoluciones > 0)
+                      Etiqueta(
+                        cantidad(devoluciones, 'devolución', 'devoluciones'),
+                        color: ColoresEstado.aviso,
+                      ),
+                  ],
+                ),
               ),
+          ],
+        ),
+        trailing: const Icon(Icons.chevron_right),
         onTap: alPulsar,
       ),
     );
@@ -946,58 +954,107 @@ class _DisenoEscaneo extends StatelessWidget {
   final Widget entradaManual;
   final Widget pie;
 
+  /// Ancho mínimo para poner cámara y lista lado a lado (cada una con sitio).
+  static const anchoDosColumnas = 720.0;
+
+  /// Altura de cabecera, selector, campo y botones de abajo (aprox.) más un
+  /// mínimo para la lista: lo que debe caber además de la cámara.
+  static const alturaResto = 440.0;
+
+  /// Cámara y lista cuando se desplazan juntas (pantallas bajas).
+  static const alturaCamaraCompacta = 200.0;
+  static const alturaListaCompacta = 260.0;
+
   @override
-  Widget build(BuildContext context) {
-    final tamano = MediaQuery.sizeOf(context);
-    if (!context.esPantallaMovil) {
-      return Column(
+  Widget build(BuildContext context) => LayoutBuilder(
+    // Se decide por el espacio que tiene (en el ordenador puede ir en un panel
+    // estrecho), no por el tamaño de la pantalla
+    // (con poca altura, p. ej. un móvil girado, una columna que se desplaza)
+    builder: (context, restricciones) =>
+        restricciones.maxWidth >= anchoDosColumnas && restricciones.maxHeight >= alturaResto + 80
+        ? _dosColumnas()
+        : _unaColumna(context, restricciones.maxHeight),
+  );
+
+  Widget _dosColumnas() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        cabecera,
+        ?modo,
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: escaner),
+                    aviso,
+                    entradaManual,
+                  ],
+                ),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: lista),
+            ],
+          ),
+        ),
+        pie,
+      ],
+    );
+  }
+
+  /// Una columna (móvil o panel estrecho). Con el teclado abierto se oculta la
+  /// cámara. Si falta altura, cámara y lista se desplazan juntas: el campo del
+  /// código y los botones de abajo quedan siempre fijos y a la vista.
+  Widget _unaColumna(BuildContext context, double alto) {
+    final teclado = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final alturaCamara = (alto * 0.34).clamp(180.0, 340.0);
+    final cabe = alto - alturaCamara >= alturaResto;
+
+    final Widget centro;
+    if (teclado) {
+      centro = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          cabecera,
           ?modo,
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: escaner),
-                      aviso,
-                      entradaManual,
-                    ],
-                  ),
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: lista),
-              ],
-            ),
-          ),
-          pie,
+          aviso,
+          Expanded(child: lista),
         ],
       );
-    }
-    // Con el teclado abierto (código a mano) o poca altura, la cámara se oculta
-    // para que la lista, el campo y los botones de abajo nunca se pierdan.
-    final teclado = MediaQuery.viewInsetsOf(context).bottom > 0;
-    return LayoutBuilder(
-      builder: (context, restricciones) {
-        final conCamara = !teclado && restricciones.maxHeight >= 560;
-        return Column(
+    } else if (cabe) {
+      centro = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ?modo,
+          SizedBox(height: alturaCamara, child: escaner),
+          aviso,
+          Expanded(child: lista),
+        ],
+      );
+    } else {
+      centro = SingleChildScrollView(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            cabecera,
             ?modo,
-            if (conCamara)
-              SizedBox(height: (tamano.height * 0.34).clamp(200.0, 340.0), child: escaner),
+            SizedBox(height: alturaCamaraCompacta, child: escaner),
             aviso,
-            Expanded(child: lista),
-            entradaManual,
-            pie,
+            SizedBox(height: alturaListaCompacta, child: lista),
           ],
-        );
-      },
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        cabecera,
+        Expanded(child: centro),
+        entradaManual,
+        pie,
+      ],
     );
   }
 }

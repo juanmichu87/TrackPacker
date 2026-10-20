@@ -88,6 +88,13 @@ class Incidencia {
   final String descripcion;
   final String estado;
   final DateTime creadoEn;
+
+  String get textoEstado => switch (estado) {
+    'abierta' => 'Abierta',
+    'en_revision' => 'En revisión',
+    'resuelta' => 'Resuelta',
+    _ => estado,
+  };
 }
 
 /// Filtro de búsqueda. Es un record para que dos filtros iguales compartan
@@ -117,6 +124,9 @@ class ClienteRepository {
 
   /// Bultos de las tiendas del cliente (el RLS solo devuelve los suyos),
   /// filtrados en el servidor.
+  /// Máximo de bultos por consulta (la vista avisa si se alcanza).
+  static const limite = 1000;
+
   Future<List<BultoCliente>> bultos(FiltroBultos f) async {
     var consulta = _db
         .from('v_bultos')
@@ -127,7 +137,7 @@ class ClienteRepository {
     if (f.tiendaId != null) consulta = consulta.eq('tienda_id', f.tiendaId!);
     if (f.estado != null) consulta = consulta.eq('estado', f.estado!);
     if (f.codigo.isNotEmpty) consulta = consulta.ilike('codigo', '%${f.codigo}%');
-    return (await consulta.order('cargado_en', ascending: false).limit(1000))
+    return (await consulta.order('cargado_en', ascending: false).limit(limite))
         .map(BultoCliente.fromJson)
         .toList();
   }
@@ -153,10 +163,12 @@ final tiendasClienteProvider = FutureProvider<List<TiendaCliente>>(
   (ref) => ref.watch(clienteRepositoryProvider).tiendas(),
 );
 
-final bultosClienteProvider = FutureProvider.family<List<BultoCliente>, FiltroBultos>(
+// autoDispose: cada búsqueda distinta se libera al dejar de mostrarse (si no,
+// cada código tecleado quedaría en memoria toda la sesión)
+final bultosClienteProvider = FutureProvider.autoDispose.family<List<BultoCliente>, FiltroBultos>(
   (ref, filtro) => ref.watch(clienteRepositoryProvider).bultos(filtro),
 );
 
-final incidenciasBultoProvider = FutureProvider.family<List<Incidencia>, String>(
+final incidenciasBultoProvider = FutureProvider.autoDispose.family<List<Incidencia>, String>(
   (ref, bultoId) => ref.watch(clienteRepositoryProvider).incidencias(bultoId),
 );

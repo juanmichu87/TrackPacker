@@ -5,11 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formato.dart';
 import '../../core/tema.dart';
+import '../../shared/avisos_cambios.dart';
 import '../../shared/estados.dart';
 import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'datos/cliente_repository.dart';
-import '../../shared/avisos_cambios.dart';
 
 /// Periodos rápidos del filtro de fecha.
 enum Periodo {
@@ -51,20 +51,27 @@ class _ClienteInicioPageState extends ConsumerState<ClienteInicioPage> {
     super.dispose();
   }
 
+  /// Al buscar un código se mira en todas las fechas: en una reclamación no
+  /// siempre se sabe qué día fue.
+  bool get _buscandoCodigo => _codigo.isNotEmpty;
+
   FiltroBultos get _filtro {
     final hoy = DateTime.now();
     final inicioHoy = DateTime(hoy.year, hoy.month, hoy.day);
     final manana = inicioHoy.add(const Duration(days: 1));
-    final (desde, hasta) = switch (_periodo) {
-      Periodo.hoy => (inicioHoy, manana),
-      Periodo.ayer => (inicioHoy.subtract(const Duration(days: 1)), inicioHoy),
-      Periodo.semana => (inicioHoy.subtract(const Duration(days: 6)), manana),
-      Periodo.quincena => (inicioHoy.subtract(const Duration(days: 13)), manana),
-      Periodo.rango => (
-        _rango?.start ?? inicioHoy,
-        (_rango?.end ?? inicioHoy).add(const Duration(days: 1)),
-      ),
-    };
+    final (desde, hasta) = _buscandoCodigo
+        // Más que los días que se conservan los datos: abarca todo
+        ? (inicioHoy.subtract(const Duration(days: 60)), manana)
+        : switch (_periodo) {
+            Periodo.hoy => (inicioHoy, manana),
+            Periodo.ayer => (inicioHoy.subtract(const Duration(days: 1)), inicioHoy),
+            Periodo.semana => (inicioHoy.subtract(const Duration(days: 6)), manana),
+            Periodo.quincena => (inicioHoy.subtract(const Duration(days: 13)), manana),
+            Periodo.rango => (
+              _rango?.start ?? inicioHoy,
+              (_rango?.end ?? inicioHoy).add(const Duration(days: 1)),
+            ),
+          };
     return (
       desde: desde,
       hasta: hasta,
@@ -257,7 +264,8 @@ class _ClienteInicioPageState extends ConsumerState<ClienteInicioPage> {
                     ? 'Fechas'
                     : p.texto,
               ),
-              selected: _periodo == p,
+              // Al buscar un código el periodo no se aplica: ninguno marcado
+              selected: !_buscandoCodigo && _periodo == p,
               onSelected: (_) => _elegirPeriodo(p),
             ),
           ),
@@ -372,6 +380,18 @@ class _ClienteInicioPageState extends ConsumerState<ClienteInicioPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(padding: const EdgeInsets.fromLTRB(12, 12, 12, 4), child: barraFiltros),
+        if (_buscandoCodigo)
+          _Nota(
+            icono: Icons.manage_search,
+            texto: 'Buscando «$_codigo» en todas las fechas (se ignora el periodo).',
+          ),
+        if (valor.value case final bultos? when bultos.length >= ClienteRepository.limite)
+          const _Nota(
+            icono: Icons.info_outline,
+            texto:
+                'Se muestran los ${ClienteRepository.limite} bultos más recientes. '
+                'Acota las fechas o filtra para ver el resto.',
+          ),
         if (valor.value case final bultos?) _Resumen(bultos: bultos),
         const Divider(height: 1),
         Expanded(
@@ -406,6 +426,29 @@ class _ClienteInicioPageState extends ConsumerState<ClienteInicioPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Línea informativa bajo los filtros.
+class _Nota extends StatelessWidget {
+  const _Nota({required this.icono, required this.texto});
+
+  final IconData icono;
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      child: Row(
+        children: [
+          Icon(icono, size: 18, color: ColoresEstado.informacion),
+          const SizedBox(width: 6),
+          Expanded(child: Text(texto, style: tema.textTheme.bodySmall)),
+        ],
+      ),
     );
   }
 }
@@ -539,7 +582,15 @@ class _DetalleBulto extends ConsumerWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.forum_outlined),
                       title: Text(i.descripcion),
-                      subtitle: Text('${fechaHora(i.creadoEn)} · ${i.estado.replaceAll('_', ' ')}'),
+                      subtitle: Text(fechaHora(i.creadoEn)),
+                      trailing: Etiqueta(
+                        i.textoEstado,
+                        color: switch (i.estado) {
+                          'resuelta' => ColoresEstado.correcto,
+                          'en_revision' => ColoresEstado.informacion,
+                          _ => ColoresEstado.aviso,
+                        },
+                      ),
                     ),
                 ],
               ),

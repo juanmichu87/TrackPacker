@@ -692,12 +692,12 @@ class _MensajeCamara extends StatelessWidget {
   Widget build(BuildContext context) => ColoredBox(
     color: Colors.black,
     child: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icono, color: Colors.white70, size: 48),
+            Icon(icono, color: Colors.white70, size: 40),
             const SizedBox(height: 12),
             Text(
               texto,

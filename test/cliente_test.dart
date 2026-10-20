@@ -72,4 +72,39 @@ void main() {
     expect(find.byType(BottomSheet), findsOneWidget);
     expect(find.text('Bulto 999000001'), findsOneWidget);
   });
+
+  testWidgets('cliente: al buscar un código se busca en todas las fechas', (tester) async {
+    FiltroBultos? ultimo;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          bultosClienteProvider.overrideWith((ref, filtro) async {
+            ultimo = filtro;
+            return [_bulto];
+          }),
+          tiendasClienteProvider.overrideWith((ref) async => const []),
+          incidenciasBultoProvider.overrideWith((ref, _) async => const []),
+          avisosCambiosProvider.overrideWith((ref) {
+            final avisos = AvisosCambios.sinTiempoReal();
+            ref.onDispose(avisos.cerrar);
+            return avisos;
+          }),
+        ],
+        child: const MaterialApp(home: Scaffold(body: ClienteInicioPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // «Hoy»: desde el inicio del día
+    expect(DateTime.now().difference(ultimo!.desde).inDays, 0);
+
+    await tester.enterText(find.byType(TextField), '0002');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('en todas las fechas'), findsOneWidget);
+    expect(ultimo!.codigo, '0002');
+    expect(DateTime.now().difference(ultimo!.desde).inDays, greaterThanOrEqualTo(14));
+  });
 }
