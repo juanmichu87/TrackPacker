@@ -30,11 +30,18 @@ class _RepoFalso implements RepartidorRepository {
       TiendaReparto(id: 't2', nombre: 'Tienda Dos', clienteId: 'c1'),
     ],
     reglas: const [],
+    deLaRuta: const {'t1', 't2', 't3'},
     bultos: [
       BultoReparto(id: 'b1', codigo: '999000001', estado: 'cargado', cargadoEn: DateTime(2026)),
       BultoReparto(id: 'b2', codigo: '999000002', estado: 'cargado', cargadoEn: DateTime(2026)),
     ],
   );
+
+  @override
+  Future<List<TiendaElegible>> tiendasElegibles(Set<String> excluir) async => const [
+    TiendaElegible(id: 't3', nombre: 'Tienda de otra franja'),
+    TiendaElegible(id: 't9', nombre: 'Tienda de otra ruta'),
+  ];
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -105,5 +112,25 @@ void main() {
 
     expect(find.text('Tienda Dos'), findsNothing);
     expect(find.widgetWithText(AppBar, 'Tienda Uno'), findsOneWidget);
+  });
+
+  testWidgets('repartidor: añadir una tienda que no está en la franja', (tester) async {
+    await _pantalla(tester, const Size(390, 844));
+    final boton = find.text('Añadir una tienda que no está en esta franja');
+    await tester.scrollUntilVisible(boton, 100);
+    await tester.tap(boton);
+    await tester.pumpAndSettle();
+
+    // Primero las de la ruta (otras franjas), luego el resto
+    expect(find.text('De esta ruta, en otras franjas'), findsOneWidget);
+    expect(find.text('Otras tiendas'), findsOneWidget);
+    final deLaRuta = tester.getRect(find.text('Tienda de otra franja'));
+    final otra = tester.getRect(find.text('Tienda de otra ruta'));
+    expect(deLaRuta.top, lessThan(otra.top));
+
+    await tester.tap(find.text('Tienda de otra franja'));
+    await tester.pumpAndSettle();
+    expect(find.text('Añadir Tienda de otra franja'), findsOneWidget); // confirmación
+    expect(find.textContaining('Se avisará al administrador'), findsOneWidget);
   });
 }

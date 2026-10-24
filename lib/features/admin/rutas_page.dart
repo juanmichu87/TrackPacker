@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/formato.dart';
+import '../../core/tema.dart';
+import '../../shared/avisos_cambios.dart';
 import '../../shared/ui.dart';
 import 'datos/admin_repository.dart';
 import 'datos/modelos.dart';
@@ -54,6 +56,12 @@ class _RutasPageState extends ConsumerState<RutasPage> {
 
     return Column(
       children: [
+        // Tiendas que los repartidores añadieron porque faltaban en la ruta
+        RecargaAutomatica(
+          temas: const {TemaCambio.repartos},
+          alCambiar: () => ref.invalidate(tiendasTemporalesProvider),
+          child: const _AvisosTiendasTemporales(),
+        ),
         BarraLista(
           pista: 'Buscar ruta',
           alBuscar: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
@@ -189,6 +197,130 @@ class _RutaDialogoState extends ConsumerState<RutaDialogo> {
           onChanged: (v) => setState(() => _activa = v),
         ),
       ],
+    );
+  }
+}
+
+/// Avisos de tiendas que un repartidor añadió a su reparto porque no estaban en
+/// la ruta. El admin decide si la añade a la ruta (y a esa salida) o no.
+class _AvisosTiendasTemporales extends ConsumerWidget {
+  const _AvisosTiendasTemporales();
+
+  Future<void> _resolver(
+    BuildContext context,
+    WidgetRef ref,
+    TiendaTemporal t, {
+    required bool agregar,
+  }) async {
+    if (!agregar &&
+        !await confirmar(
+          context,
+          titulo: 'No añadir ${t.tienda}',
+          mensaje:
+              'La tienda no se añadirá a la franja. El reparto en el que se usó no cambia. '
+              'Si vuelve a hacer falta, el repartidor podrá añadirla otra vez.',
+          accion: 'No añadir',
+        )) {
+      return;
+    }
+    if (!context.mounted) return;
+    final ok = await ejecutar(
+      context,
+      () => ref.read(adminRepositoryProvider).resolverTiendaTemporal(t.id, agregar: agregar),
+      exito: agregar
+          ? '${t.tienda} añadida a ${t.ruta}${t.salida == null ? '' : ' (salida ${t.salida})'}'
+          : 'Aviso descartado',
+    );
+    if (!ok) return;
+    ref.invalidate(tiendasTemporalesProvider);
+    refrescarRutasYTiendas(ref);
+    ref.invalidate(salidasDeRutaProvider);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final avisos = ref.watch(tiendasTemporalesProvider).value ?? const <TiendaTemporal>[];
+    if (avisos.isEmpty) return const SizedBox.shrink();
+    final tema = Theme.of(context);
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      color: ColoresEstado.aviso.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: ColoresEstado.aviso.withValues(alpha: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.add_business_outlined, color: ColoresEstado.aviso),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Tiendas añadidas por repartidores (${avisos.length})',
+                    style: tema.textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              'No estaban en la franja (salida) del reparto y las necesitaron para entregar. '
+              'Decide si las añades a esa franja.',
+              style: tema.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            // Con muchos avisos, la lista se desplaza y no tapa las rutas
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 260),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: avisos.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final t = avisos[i];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: t.tienda,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              TextSpan(
+                                text:
+                                    ' · ${t.ruta}${t.salida == null ? '' : ' (${t.salida})'}'
+                                    ' · ${t.repartidor}, ${fechaHora(t.creadaEn)}',
+                              ),
+                            ],
+                          ),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: () => _resolver(context, ref, t, agregar: true),
+                          child: const Text('Añadir a la franja'),
+                        ),
+                        TextButton(
+                          onPressed: () => _resolver(context, ref, t, agregar: false),
+                          child: const Text('No añadir'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

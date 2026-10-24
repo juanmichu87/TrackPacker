@@ -103,6 +103,7 @@ class TiendaReparto {
     required this.clienteId,
     this.direccion,
     this.orden,
+    this.temporal = false,
   });
 
   final String id;
@@ -110,7 +111,28 @@ class TiendaReparto {
   final String clienteId;
   final String? direccion;
   final int? orden;
+
+  /// Añadida por el repartidor a este reparto (no está en la ruta).
+  final bool temporal;
 }
+
+/// Tienda que se puede añadir temporalmente al reparto.
+class TiendaElegible {
+  const TiendaElegible({required this.id, required this.nombre, this.direccion});
+
+  final String id;
+  final String nombre;
+  final String? direccion;
+}
+
+String _direccion(Json t) => [
+  t['direccion'],
+  t['localidad'],
+].whereType<String>().where((p) => p.trim().isNotEmpty).join(', ');
+
+const _selectTiendaReparto =
+    'id, nombre, direccion, localidad, cliente_id, activa, '
+    'clientes(formatos, patron_extraccion, longitud_min, longitud_max)';
 
 class BultoReparto {
   const BultoReparto({
@@ -146,9 +168,14 @@ class DatosReparto {
     required this.tiendas,
     required this.reglas,
     required this.bultos,
+    this.deLaRuta = const {},
   });
 
   final RepartoActivo reparto;
+
+  /// Todas las tiendas de la ruta (también las de otras franjas): al añadir
+  /// una tienda temporal se ofrecen primero.
+  final Set<String> deLaRuta;
 
   /// Tiendas de la salida (o de la ruta si no tiene salida), en orden.
   final List<TiendaReparto> tiendas;
@@ -192,14 +219,11 @@ class RepartidorRepository {
 
   /// Carga en paralelo todo lo necesario para trabajar con un reparto.
   Future<DatosReparto> datosReparto(RepartoActivo reparto) async {
-    final (filasTiendas, filasSalida, filasBultos) = await (
+    final (filasTiendas, filasSalida, filasBultos, filasTemporales) = await (
       _db
           .from('ruta_tiendas')
           // Las reglas de lectura del cliente llegan embebidas (sin otra consulta)
-          .select(
-            'orden, tiendas(id, nombre, direccion, localidad, cliente_id, activa, '
-            'clientes(formatos, patron_extraccion, longitud_min, longitud_max))',
-          )
+          .select('orden, tiendas($_selectTiendaReparto)')
           .eq('ruta_id', reparto.rutaId)
           .order('orden', ascending: true, nullsFirst: false),
       reparto.salidaId == null
@@ -210,6 +234,7 @@ class RepartidorRepository {
           .select('id, codigo, estado, tienda_id, cargado_en, entregado_en')
           .eq('reparto_id', reparto.id)
           .order('cargado_en', ascending: false),
+      _temporales(reparto.id),
     ).wait;
 
     final deLaSalida = {for (final f in filasSalida) f['tienda_id'] as String};
@@ -221,17 +246,24 @@ class RepartidorRepository {
               id: t['id'] as String,
               nombre: t['nombre'] as String,
               clienteId: t['cliente_id'] as String,
-              direccion: [
-                t['direccion'],
-                t['localidad'],
-              ].whereType<String>().where((p) => p.trim().isNotEmpty).join(', '),
+              direccion: _direccion(t),
               orden: f['orden'] as int?,
             ),
+      // Las que añadió el repartidor, al final
+      for (final f in filasTemporales)
+        if (f['tiendas'] case final Json t)
+          TiendaReparto(
+            id: t['id'] as String,
+            nombre: t['nombre'] as String,
+            clienteId: t['cliente_id'] as String,
+            direccion: _direccion(t),
+            temporal: true,
+          ),
     ];
 
     // Una regla por cliente de las tiendas visibles
     final reglasPorCliente = <String, ReglaCliente>{
-      for (final f in filasTiendas)
+      for (final f in [...filasTiendas, ...filasTemporales])
         if (f['tiendas'] case final Json t)
           if (tiendas.any((x) => x.id == t['id']))
             if (t['clientes'] case final Json c)
@@ -242,10 +274,52 @@ class RepartidorRepository {
     return DatosReparto(
       reparto: reparto,
       tiendas: tiendas,
+      deLaRuta: {
+        for (final f in filasTiendas)
+          if (f['tiendas'] case final Json t) t['id'] as String,
+      },
       reglas: reglas,
       bultos: [for (final f in filasBultos) BultoReparto.fromJson(f)],
     );
   }
+
+  /// Tiendas temporales del reparto (vacío si la base de datos aún no tiene
+  /// la migración 13).
+  Future<List<Json>> _temporales(String repartoId) async {
+    try {
+      return await _db
+          .from('tiendas_temporales')
+          .select('tiendas($_selectTiendaReparto)')
+          .eq('reparto_id', repartoId)
+          .order('creada_en', ascending: true);
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST205' || e.code == '42P01') return const [];
+      rethrow;
+    }
+  }
+
+  /// Tiendas activas que se pueden añadir temporalmente (todas menos las que
+  /// ya tiene el reparto).
+  Future<List<TiendaElegible>> tiendasElegibles(Set<String> excluir) async => [
+    for (final t
+        in await _db
+            .from('tiendas')
+            .select('id, nombre, direccion, localidad')
+            .eq('activa', true)
+            .order('nombre', ascending: true))
+      if (!excluir.contains(t['id']))
+        TiendaElegible(
+          id: t['id'] as String,
+          nombre: t['nombre'] as String,
+          direccion: _direccion(t),
+        ),
+  ]..sort((a, b) => compararNatural(a.nombre, b.nombre));
+
+  /// Añade una tienda solo a este reparto; el admin recibe el aviso.
+  Future<void> agregarTiendaTemporal(String repartoId, String tiendaId) => _db.rpc(
+    'agregar_tienda_temporal',
+    params: {'p_reparto_id': repartoId, 'p_tienda_id': tiendaId},
+  );
 
   Future<void> iniciar(String rutaId, String? salidaId) =>
       _db.rpc('iniciar_reparto', params: {'p_ruta_id': rutaId, 'p_salida_id': salidaId});

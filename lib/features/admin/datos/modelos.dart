@@ -324,4 +324,38 @@ class Resumen {
   int get pendientesHoy => _bultos('pendientes');
   int get noEntregadosHoy => _bultos('no_entregados');
   int get devolucionesHoy => _bultos('devoluciones');
+  int get tiendasTemporales => _n('tiendas_temporales');
+}
+
+/// Tienda que un repartidor añadió a su reparto porque no estaba en la ruta.
+class TiendaTemporal {
+  const TiendaTemporal({
+    required this.id,
+    required this.tienda,
+    required this.ruta,
+    required this.repartidor,
+    required this.creadaEn,
+    this.salida,
+  });
+
+  factory TiendaTemporal.fromJson(Json j) {
+    final reparto = j['repartos'] as Json? ?? const {};
+    final usuario = j['repartidor'] as Json? ?? const {};
+    final nombre = (usuario['nombre_completo'] as String?)?.trim() ?? '';
+    return TiendaTemporal(
+      id: j['id'] as String,
+      tienda: (j['tiendas'] as Json?)?['nombre'] as String? ?? '—',
+      ruta: (reparto['rutas'] as Json?)?['nombre'] as String? ?? '—',
+      salida: (reparto['salidas'] as Json?)?['nombre'] as String?,
+      repartidor: nombre.isNotEmpty ? nombre : usuario['usuario'] as String? ?? '—',
+      creadaEn: DateTime.parse(j['creada_en'] as String),
+    );
+  }
+
+  final String id;
+  final String tienda;
+  final String ruta;
+  final String? salida;
+  final String repartidor;
+  final DateTime creadaEn;
 }

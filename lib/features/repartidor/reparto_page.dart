@@ -96,6 +96,10 @@ class _VistaCarga extends ConsumerStatefulWidget {
 
 class _VistaCargaState extends ConsumerState<_VistaCarga> {
   final _cola = ColaEscaneos();
+
+  /// La cámara conserva su estado aunque cambie el diseño (teclado, espacio):
+  /// reiniciarla en el navegador puede dejarla abierta pero sin leer.
+  final _claveEscaner = GlobalKey();
   AvisoLectura? _aviso;
   bool _confirmando = false;
 
@@ -205,9 +209,9 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
     final escaner = VistaEscaner(
+      key: _claveEscaner,
       formatos: formatosDeReglas(widget.datos.reglas),
       alLeer: _leido,
-      disparoUnico: true,
       aceptar: (v) => extraerIdConReglas(v, widget.datos.reglas) is IdValido,
     );
     final lista = _ListaBultos(
@@ -298,6 +302,39 @@ class _VistaEnRutaState extends ConsumerState<_VistaEnRuta> {
     );
   }
 
+  /// Si a la franja (salida) le falta una tienda, el repartidor la añade a este
+  /// reparto (solo a este) para poder entregar allí. El admin recibe el aviso y
+  /// decide si la añade a la franja.
+  Future<void> _anadirTiendaTemporal() async {
+    final elegida = await mostrarPanel<TiendaElegible>(
+      context,
+      builder: (_) => _SelectorTiendaTemporal(
+        excluir: {for (final t in datos.tiendas) t.id},
+        deLaRuta: datos.deLaRuta,
+      ),
+    );
+    if (elegida == null || !mounted) return;
+    if (!await confirmar(
+      context,
+      titulo: 'Añadir ${elegida.nombre}',
+      mensaje:
+          'Se añadirá solo a este reparto, para que puedas entregar allí. '
+          'Se avisará al administrador para que decida si la añade a esta franja.',
+      accion: 'Añadir',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    final ok = await ejecutar(
+      context,
+      () => ref
+          .read(repartidorRepositoryProvider)
+          .agregarTiendaTemporal(datos.reparto.id, elegida.id),
+      exito: '${elegida.nombre} añadida. Se ha avisado al administrador.',
+    );
+    if (ok) await widget.alRecargar();
+  }
+
   Future<void> _cerrar() async {
     final pendientes = bultos.where((b) => b.estado == 'cargado').length;
     final cierre = await showDialog<_Cierre>(
@@ -366,7 +403,14 @@ class _VistaEnRutaState extends ConsumerState<_VistaEnRuta> {
                   ),
                   const SizedBox(height: 8),
                   if (datos.tiendas.isEmpty)
-                    const ListaVacia('Esta ruta no tiene tiendas. Avisa al administrador.'),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'Esta salida no tiene tiendas. Añade abajo la tienda en la que '
+                        'tienes que entregar; se avisará al administrador.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   for (final (i, t) in datos.tiendas.indexed)
                     _FilaTienda(
                       numero: i + 1,
@@ -380,6 +424,12 @@ class _VistaEnRutaState extends ConsumerState<_VistaEnRuta> {
                       seleccionada: t.id == tienda?.id,
                       alPulsar: () => _abrirTienda(t),
                     ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _anadirTiendaTemporal,
+                    icon: const Icon(Icons.add_business_outlined),
+                    label: const Text('Añadir una tienda que no está en esta franja'),
+                  ),
                 ],
               ),
             ),
@@ -438,6 +488,11 @@ class _FilaTienda extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (tienda.direccion?.isNotEmpty ?? false) Text(tienda.direccion!),
+            if (tienda.temporal)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Etiqueta('Temporal · añadida por ti', color: ColoresEstado.aviso),
+              ),
             if (entregados + devoluciones > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -493,6 +548,10 @@ class EntregaTiendaPage extends ConsumerStatefulWidget {
 
 class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
   final _cola = ColaEscaneos();
+
+  /// La cámara conserva su estado aunque cambie el diseño (teclado, espacio):
+  /// reiniciarla en el navegador puede dejarla abierta pero sin leer.
+  final _claveEscaner = GlobalKey();
   AvisoLectura? _aviso;
   int _fotos = 0;
   bool _subiendoFoto = false;
@@ -744,9 +803,9 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
         ),
       ),
       escaner: VistaEscaner(
+        key: _claveEscaner,
         formatos: formatosDeReglas(widget.datos.reglas),
         alLeer: _leido,
-        disparoUnico: true,
         aceptar: (v) => extraerIdConReglas(v, widget.datos.reglas) is IdValido,
       ),
       aviso: FranjaAviso(_aviso),
@@ -1014,39 +1073,34 @@ class _DisenoEscaneo extends StatelessWidget {
     final alturaCamara = (alto * 0.34).clamp(180.0, 340.0);
     final cabe = alto - alturaCamara >= alturaResto;
 
-    final Widget centro;
-    if (teclado) {
-      centro = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ?modo,
-          aviso,
-          Expanded(child: lista),
-        ],
-      );
-    } else if (cabe) {
-      centro = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ?modo,
-          SizedBox(height: alturaCamara, child: escaner),
-          aviso,
-          Expanded(child: lista),
-        ],
-      );
-    } else {
-      centro = SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ?modo,
-            SizedBox(height: alturaCamaraCompacta, child: escaner),
-            aviso,
-            SizedBox(height: alturaListaCompacta, child: lista),
-          ],
-        ),
-      );
-    }
+    // Con el teclado abierto la cámara se oculta, pero sigue montada: así no se
+    // reinicia al cerrarlo
+    Widget camara(double altura) => Offstage(
+      offstage: teclado,
+      child: SizedBox(height: altura, child: escaner),
+    );
+
+    final Widget centro = cabe || teclado
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ?modo,
+              camara(alturaCamara),
+              aviso,
+              Expanded(child: lista),
+            ],
+          )
+        : SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ?modo,
+                camara(alturaCamaraCompacta),
+                aviso,
+                SizedBox(height: alturaListaCompacta, child: lista),
+              ],
+            ),
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1167,6 +1221,119 @@ class _ListaBultos extends StatelessWidget {
                 ),
         );
       },
+    );
+  }
+}
+
+/// Buscador de tiendas para añadir temporalmente al reparto.
+class _SelectorTiendaTemporal extends ConsumerStatefulWidget {
+  const _SelectorTiendaTemporal({required this.excluir, required this.deLaRuta});
+
+  final Set<String> excluir;
+  final Set<String> deLaRuta;
+
+  @override
+  ConsumerState<_SelectorTiendaTemporal> createState() => _SelectorTiendaTemporalState();
+}
+
+class _SelectorTiendaTemporalState extends ConsumerState<_SelectorTiendaTemporal> {
+  late final _tiendas = ref.read(repartidorRepositoryProvider).tiendasElegibles(widget.excluir);
+  String _busqueda = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('¿En qué tienda tienes que entregar?', style: tema.textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              'Solo para este reparto. El administrador decidirá si la añade a la franja.',
+              style: tema.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(
+                hintText: 'Buscar tienda',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _busqueda = normalizarBusqueda(v)),
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.5),
+              child: FutureBuilder(
+                future: _tiendas,
+                builder: (context, estado) {
+                  if (estado.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(mensajeError(estado.error!)),
+                    );
+                  }
+                  final tiendas = estado.data;
+                  if (tiendas == null) {
+                    return const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  final filtradas = [
+                    for (final t in tiendas)
+                      if (_busqueda.isEmpty ||
+                          coincideBusqueda(t.nombre, _busqueda) ||
+                          coincideBusqueda(t.direccion, _busqueda))
+                        t,
+                  ];
+                  if (filtradas.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('No hay tiendas con ese nombre.'),
+                    );
+                  }
+                  final deLaRuta = [
+                    for (final t in filtradas)
+                      if (widget.deLaRuta.contains(t.id)) t,
+                  ];
+                  final otras = [
+                    for (final t in filtradas)
+                      if (!widget.deLaRuta.contains(t.id)) t,
+                  ];
+                  Widget titulo(String texto) => Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+                    child: Text(texto, style: tema.textTheme.titleSmall),
+                  );
+                  Widget fila(TiendaElegible t) => ListTile(
+                    leading: const Icon(Icons.storefront_outlined),
+                    title: Text(t.nombre),
+                    subtitle: (t.direccion?.isNotEmpty ?? false) ? Text(t.direccion!) : null,
+                    onTap: () => Navigator.pop(context, t),
+                  );
+                  return ListView(
+                    shrinkWrap: true,
+                    children: [
+                      if (deLaRuta.isNotEmpty) ...[
+                        titulo('De esta ruta, en otras franjas'),
+                        for (final t in deLaRuta) fila(t),
+                      ],
+                      if (otras.isNotEmpty) ...[
+                        titulo(deLaRuta.isEmpty ? 'Tiendas' : 'Otras tiendas'),
+                        for (final t in otras) fila(t),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

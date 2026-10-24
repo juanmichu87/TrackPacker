@@ -99,6 +99,13 @@ class ResumenPage extends ConsumerWidget {
                 null,
                 color: r.incidenciasAbiertas > 0 ? ColoresEstado.aviso : null,
               ),
+              _Dato(
+                'Tiendas añadidas a franjas',
+                r.tiendasTemporales,
+                Icons.add_business_outlined,
+                '/admin/rutas',
+                color: r.tiendasTemporales > 0 ? ColoresEstado.aviso : null,
+              ),
             ]),
             const SizedBox(height: 24),
             Text('Configuración', style: Theme.of(context).textTheme.titleLarge),

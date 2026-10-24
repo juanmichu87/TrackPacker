@@ -11,6 +11,7 @@ import 'package:track_pack/features/repartidor/reparto_page.dart';
 import 'package:track_pack/features/repartidor/seleccion_ruta.dart';
 import 'package:track_pack/shared/aviso_esquema.dart';
 import 'package:track_pack/shared/avisos_cambios.dart';
+import 'package:track_pack/shared/escaner.dart';
 import 'package:track_pack/shared/shell_panel.dart';
 
 const _tamanos = <String, Size>{
@@ -143,6 +144,15 @@ void _accesible(WidgetTester tester, Finder control, Size tamano, String donde) 
   expect(control.first.hitTestable(), findsOneWidget, reason: '$donde: está tapado');
 }
 
+/// La cámara del lector está en pantalla con un tamaño útil.
+void _camaraVisible(WidgetTester tester, Size tamano) {
+  final camara = find.byType(VistaEscaner);
+  expect(camara, findsOneWidget, reason: 'cámara: no aparece');
+  final rect = tester.getRect(camara);
+  final visible = rect.intersect(Offset.zero & tamano);
+  expect(visible.height, greaterThanOrEqualTo(150), reason: 'cámara: demasiado pequeña ($rect)');
+}
+
 void main() {
   for (final MapEntry(key: nombre, value: tamano) in _tamanos.entries) {
     // En un teléfono girado el lector se pausa (aviso de girar el móvil)
@@ -165,7 +175,7 @@ void main() {
         _accesible(tester, find.byTooltip('Leer desde foto'), tamano, 'leer desde foto');
         _accesible(tester, find.byTooltip('Ajustes'), tamano, 'ajustes');
         if (!esMovilHorizontal) {
-          _accesible(tester, find.text('Escanear etiqueta'), tamano, 'escanear etiqueta');
+          _camaraVisible(tester, tamano);
         }
       });
 
@@ -187,7 +197,7 @@ void main() {
         _accesible(tester, find.text('Usar'), tamano, 'botón usar');
         _accesible(tester, find.byTooltip('Leer desde foto'), tamano, 'leer desde foto');
         if (!esMovilHorizontal) {
-          _accesible(tester, find.text('Escanear etiqueta'), tamano, 'escanear etiqueta');
+          _camaraVisible(tester, tamano);
         }
         if (tamano.width < 1000) {
           // Pantalla propia: la flecha para volver a la lista de tiendas

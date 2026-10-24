@@ -15,7 +15,7 @@ abstract final class Config {
 
   /// Versión de la base de datos que necesita esta versión de la app (la
   /// última migración de supabase/migrations). Súbela con cada migración.
-  static const versionEsquema = 12;
+  static const versionEsquema = 13;
 
   static bool get completa =>
       supabaseUrl.isNotEmpty && supabaseKey.isNotEmpty && dominioUsuarios.isNotEmpty;

@@ -216,6 +216,31 @@ class AdminRepository {
   Future<void> eliminarUsuario(String id) =>
       _db.rpc('admin_eliminar_usuario', params: {'p_id': id});
 
+  // --- Tiendas añadidas por los repartidores -----------------------------------
+
+  /// Avisos pendientes (vacío si la base de datos aún no tiene la migración 13).
+  Future<List<TiendaTemporal>> tiendasTemporales() async {
+    try {
+      return (await _db
+              .from('tiendas_temporales')
+              .select(
+                'id, creada_en, tiendas(nombre), repartos(rutas(nombre), salidas(nombre)), '
+                'repartidor:usuarios!tiendas_temporales_repartidor_id_fkey(nombre_completo, usuario)',
+              )
+              .eq('estado', 'pendiente')
+              .order('creada_en', ascending: false))
+          .map(TiendaTemporal.fromJson)
+          .toList();
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST205' || e.code == '42P01') return const [];
+      rethrow;
+    }
+  }
+
+  /// Añadir la tienda a la ruta (y a la salida) o descartar el aviso.
+  Future<void> resolverTiendaTemporal(String id, {required bool agregar}) =>
+      _db.rpc('admin_resolver_tienda_temporal', params: {'p_id': id, 'p_agregar': agregar});
+
   // --- Repartos --------------------------------------------------------------
 
   /// Repartos del periodo y, además, los que siguen abiertos aunque
@@ -271,6 +296,10 @@ final tiendasProvider = FutureProvider<List<Tienda>>(
 );
 final usuariosProvider = FutureProvider<List<UsuarioAdmin>>(
   (ref) => ref.watch(adminRepositoryProvider).usuarios(),
+);
+
+final tiendasTemporalesProvider = FutureProvider<List<TiendaTemporal>>(
+  (ref) => ref.watch(adminRepositoryProvider).tiendasTemporales(),
 );
 
 final salidasDeRutaProvider = FutureProvider.family<List<Salida>, String>(
