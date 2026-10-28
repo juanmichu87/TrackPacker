@@ -23,7 +23,9 @@ export PATH="$HOME/flutter/bin:$PATH"
 flutter config --no-analytics > /dev/null
 flutter --version
 
-flutter build web --release \
+# --wasm: Chrome y Edge (Android y PC) usan WebAssembly, que arranca unas 3
+# veces más rápido; Safari y Firefox siguen con JavaScript (se elige solo).
+flutter build web --release --wasm \
   --dart-define=SUPABASE_URL="$SUPABASE_URL" \
   --dart-define=SUPABASE_KEY="$SUPABASE_KEY" \
   --dart-define=AUTH_DOMINIO="$AUTH_DOMINIO"

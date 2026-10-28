@@ -244,7 +244,7 @@ class _VistaEscanerState extends State<VistaEscaner> {
           child: Text(
             _otroCodigo
                 ? 'Leído «$_otroValor»: no es el código del bulto. Apunta al código del ID'
-                : 'Coloca el código completo dentro del recuadro, en horizontal',
+                : 'Coloca el código completo dentro del recuadro o en horizontal',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,

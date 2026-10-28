@@ -35,8 +35,34 @@
   <link rel="manifest" href="manifest.json">
 
   <!-- Descargas en paralelo desde el primer momento (antes esperaban a que
-       terminara de cargar la anterior) -->
-  <link rel="preload" href="main.dart.js" as="script">
+       terminara de cargar la anterior). Chrome y Edge usan la versión
+       WebAssembly (arranca unas 3 veces más rápido); Safari y Firefox, la
+       JavaScript. La comprobación es la misma que hace flutter.js. -->
+  <script>
+    (function () {
+      var wasm = false;
+      try {
+        var chromium = navigator.vendor === 'Google Inc.' || navigator.userAgent.indexOf('Edg/') >= 0;
+        var gc = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 95, 1, 120, 0]);
+        wasm = chromium && typeof WebAssembly !== 'undefined' && WebAssembly.validate(gc);
+      } catch (e) {}
+      var archivos = wasm
+        ? [['main.dart.wasm', 'fetch'], ['main.dart.mjs', 'modulepreload']]
+        : [['main.dart.js', 'script']];
+      archivos.forEach(function (a) {
+        var l = document.createElement('link');
+        l.href = a[0];
+        if (a[1] === 'modulepreload') {
+          l.rel = 'modulepreload';
+        } else {
+          l.rel = 'preload';
+          l.as = a[1];
+          if (a[1] === 'fetch') l.crossOrigin = 'anonymous';
+        }
+        document.head.appendChild(l);
+      });
+    })();
+  </script>
   <link rel="preload" href="assets/FontManifest.json" as="fetch" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
