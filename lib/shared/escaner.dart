@@ -87,7 +87,7 @@ class _PantallaLecturaUnicaState extends State<_PantallaLecturaUnica> {
   }
 }
 
-/// Cámara con recuadro de lectura, linterna, zoom y cambio de cámara. Lee en
+/// Cámara con recuadro de lectura, linterna y cambio de cámara. Lee en
 /// continuo y llama a `alLeer` con cada etiqueta nueva.
 ///
 /// La cámara ve la misma etiqueta muchas veces por segundo: mientras siga a la
@@ -150,7 +150,6 @@ class _VistaEscanerState extends State<VistaEscaner> {
   late final _filtro = FiltroLecturas(pausa: widget.pausaMismoCodigo);
   bool _destello = false;
   Timer? _temporizadorDestello;
-  double _zoom = 0;
 
   /// La cámara está viendo un código que no es el del bulto (aviso temporal).
   bool _otroCodigo = false;
@@ -199,15 +198,6 @@ class _VistaEscanerState extends State<VistaEscaner> {
 
       widget.alLeer(LecturaCodigo(valor, formatoDesdeEscaner(codigo.format)));
       return;
-    }
-  }
-
-  Future<void> _cambiarZoom(double valor) async {
-    setState(() => _zoom = valor);
-    try {
-      await _controlador.setZoomScale(valor);
-    } catch (_) {
-      // Algunos navegadores no permiten zoom: se ignora.
     }
   }
 
@@ -263,12 +253,7 @@ class _VistaEscanerState extends State<VistaEscaner> {
             ),
           ),
         ),
-        Positioned(
-          left: 8,
-          right: 8,
-          bottom: 8,
-          child: _Controles(controlador: _controlador, zoom: _zoom, alCambiarZoom: _cambiarZoom),
-        ),
+        Positioned(left: 8, right: 8, bottom: 8, child: _Controles(controlador: _controlador)),
       ],
     );
   }
@@ -308,11 +293,9 @@ class _MarcoLectura extends CustomPainter {
 }
 
 class _Controles extends StatelessWidget {
-  const _Controles({required this.controlador, required this.zoom, required this.alCambiarZoom});
+  const _Controles({required this.controlador});
 
   final MobileScannerController controlador;
-  final double zoom;
-  final ValueChanged<double> alCambiarZoom;
 
   @override
   Widget build(BuildContext context) {
@@ -329,17 +312,8 @@ class _Controles extends StatelessWidget {
                 icon: Icon(linterna == TorchState.on ? Icons.flash_on : Icons.flash_off),
                 onPressed: controlador.toggleTorch,
               ),
-            Expanded(
-              child: Row(
-                children: [
-                  const Icon(Icons.zoom_out, color: Colors.white),
-                  Expanded(
-                    child: Slider(value: zoom, onChanged: alCambiarZoom),
-                  ),
-                  const Icon(Icons.zoom_in, color: Colors.white),
-                ],
-              ),
-            ),
+            // Sin zoom: en el navegador del móvil no funcionaba
+            const Spacer(),
             if ((estado.availableCameras ?? 2) > 1)
               IconButton.filledTonal(
                 tooltip: 'Cambiar de cámara',
