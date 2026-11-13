@@ -491,7 +491,8 @@ class EntradaManual extends StatefulWidget {
     this.aceptar,
   });
 
-  final ValueChanged<String> alEnviar;
+  /// Se muestra la animación de carga hasta que termina (si devuelve un Future).
+  final FutureOr<void> Function(String codigo) alEnviar;
 
   /// Si se da, aparece un botón de cámara para leer el código desde una foto
   /// (la foto enfoca mejor que el vídeo: lee etiquetas que en vivo cuestan).
@@ -507,6 +508,14 @@ class _EntradaManualState extends State<EntradaManual> {
   final _texto = TextEditingController();
   final _foco = FocusNode();
   bool _analizando = false;
+  bool _enviando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // El botón de enviar solo se activa con algo escrito
+    _texto.addListener(() => setState(() {}));
+  }
 
   Future<void> _foto() async {
     final lectura = await leerCodigoDeFoto(
@@ -527,13 +536,19 @@ class _EntradaManualState extends State<EntradaManual> {
     super.dispose();
   }
 
-  void _enviar() {
+  Future<void> _enviar() async {
     final valor = _texto.text.trim();
-    if (valor.isEmpty) return;
+    if (valor.isEmpty || _enviando) return;
     _texto.clear();
-    widget.alEnviar(valor);
     // Mantener el foco: con un lector de pistola se escanea un bulto tras otro
     _foco.requestFocus();
+    // La animación dura lo que tarda en procesarse, ni más ni menos
+    setState(() => _enviando = true);
+    try {
+      await widget.alEnviar(valor);
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
   }
 
   @override
@@ -576,7 +591,19 @@ class _EntradaManualState extends State<EntradaManual> {
               ),
             ),
             const SizedBox(width: 8),
-            FilledButton(onPressed: _enviar, child: const Text('Usar')),
+            _enviando
+                ? const SizedBox.square(
+                    dimension: 40,
+                    child: Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton.filled(
+                    tooltip: 'Enviar código',
+                    onPressed: _texto.text.trim().isEmpty ? null : _enviar,
+                    icon: const Icon(Icons.send),
+                  ),
           ],
         ),
       ),

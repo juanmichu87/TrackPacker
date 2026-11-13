@@ -11,6 +11,33 @@ void quitarPantallaCarga() {
   } catch (_) {}
 }
 
+/// Que la app recupere su tamaño al cerrar el teclado del móvil.
+void prepararTeclado() {
+  try {
+    // Chrome en Android: el teclado encoge la página (como en una app) en vez de
+    // taparla y desplazarla. La etiqueta la crea Flutter al arrancar.
+    final meta = web.document.querySelector('meta[name="viewport"]');
+    final contenido = meta?.getAttribute('content') ?? '';
+    if (meta != null && !contenido.contains('interactive-widget')) {
+      meta.setAttribute('content', '$contenido, interactive-widget=resizes-content');
+    }
+    // Safari en iPhone desplaza la página al abrir el teclado y a veces no la
+    // devuelve al cerrarlo: al crecer la vista, se vuelve arriba del todo
+    final vista = web.window.visualViewport;
+    var alto = vista?.height ?? 0;
+    vista?.addEventListener(
+      'resize',
+      ((web.Event _) {
+        final nuevo = vista.height;
+        if (nuevo > alto && (web.window.scrollY != 0 || web.window.scrollX != 0)) {
+          web.window.scrollTo(0.toJS, 0);
+        }
+        alto = nuevo;
+      }).toJS,
+    );
+  } catch (_) {}
+}
+
 /// Vibración corta (lectura correcta) o larga (error o duplicado). Los
 /// navegadores que no la admiten (p. ej. Safari en iPhone) la ignoran.
 void vibrar({bool larga = false}) {

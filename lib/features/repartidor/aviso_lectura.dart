@@ -75,7 +75,7 @@ void vibrarSegun(TipoAviso tipo) => vibrar(larga: tipo != TipoAviso.correcto);
 class ColaEscaneos {
   Future<void> _ultima = Future.value();
 
-  void encolar(Future<void> Function() tarea) {
-    _ultima = _ultima.then((_) => tarea()).catchError((Object _) {});
-  }
+  /// Termina cuando se ha procesado esta lectura.
+  Future<void> encolar(Future<void> Function() tarea) =>
+      _ultima = _ultima.then((_) => tarea()).catchError((Object _) {});
 }

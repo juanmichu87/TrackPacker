@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/sesion.dart';
+import '../features/repartidor/datos/cola_lecturas.dart';
 import 'aviso_esquema.dart';
 import 'responsive.dart';
 import 'ui.dart';
@@ -55,15 +56,22 @@ class BotonAjustes extends ConsumerWidget {
   const BotonAjustes({super.key});
 
   Future<void> _cerrarSesion(BuildContext context, WidgetRef ref) async {
+    // Lecturas del repartidor guardadas en el móvil que aún no han llegado
+    final sinEnviar = ref.read(colaLecturasProvider).pendientes.length;
     if (!await confirmar(
       context,
       titulo: 'Cerrar sesión',
-      mensaje: '¿Seguro que quieres cerrar sesión?',
-      accion: 'Cerrar sesión',
+      mensaje: sinEnviar == 0
+          ? '¿Seguro que quieres cerrar sesión?'
+          : 'Tienes $sinEnviar ${sinEnviar == 1 ? 'lectura' : 'lecturas'} sin enviar por falta '
+                'de conexión. Si cierras sesión ahora se perderán.\n\n'
+                'Espera a tener conexión para que se envíen solas.',
+      accion: sinEnviar == 0 ? 'Cerrar sesión' : 'Cerrar y perderlas',
       peligroso: true,
     )) {
       return;
     }
+    ref.read(colaLecturasProvider.notifier).vaciar();
     await ref.read(sesionProvider.notifier).cerrarSesion();
   }
 

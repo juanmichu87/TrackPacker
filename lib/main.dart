@@ -28,7 +28,10 @@ Future<void> main() async {
     // Sin almacén local (p. ej. navegación privada estricta): sin caché de perfil
   }
   // La pantalla de carga de index.html se quita en cuanto la app se dibuja
-  WidgetsBinding.instance.addPostFrameCallback((_) => quitarPantallaCarga());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    quitarPantallaCarga();
+    prepararTeclado();
+  });
   runApp(
     ProviderScope(
       overrides: [preferenciasProvider.overrideWithValue(preferencias)],

@@ -11,6 +11,9 @@ import '../../../core/supabase.dart';
 
 typedef Json = Map<String, dynamic>;
 
+/// Hora de la lectura (la del móvil al escanear, aunque se envíe más tarde).
+String _hora(DateTime? h) => (h ?? DateTime.now()).toUtc().toIso8601String();
+
 DateTime? _fecha(Object? v) => v == null ? null : DateTime.parse(v as String);
 
 /// Ruta con su ocupación actual (quién la está haciendo).
@@ -142,6 +145,7 @@ class BultoReparto {
     required this.cargadoEn,
     this.tiendaId,
     this.entregadoEn,
+    this.sinEnviar = false,
   });
 
   factory BultoReparto.fromJson(Json j) => BultoReparto(
@@ -159,6 +163,9 @@ class BultoReparto {
   final String? tiendaId;
   final DateTime cargadoEn;
   final DateTime? entregadoEn;
+
+  /// Leído en el móvil pero aún no guardado en la base de datos (sin conexión).
+  final bool sinEnviar;
 }
 
 /// Todo lo que necesita la pantalla de un reparto, cargado de una vez.
@@ -325,16 +332,20 @@ class RepartidorRepository {
       _db.rpc('iniciar_reparto', params: {'p_ruta_id': rutaId, 'p_salida_id': salidaId});
 
   /// 'ok', 'duplicado' o 'duplicado_otro_reparto'
-  Future<String> escanearCarga(String repartoId, String codigo, String? formato) async =>
-      await _db.rpc(
-        'escanear_carga',
-        params: {
-          'p_reparto_id': repartoId,
-          'p_codigo': codigo,
-          'p_formato': formato,
-          'p_escaneado_en': DateTime.now().toUtc().toIso8601String(),
-        },
-      ) as String;
+  Future<String> escanearCarga(
+    String repartoId,
+    String codigo,
+    String? formato, {
+    DateTime? escaneadoEn,
+  }) async => await _db.rpc(
+    'escanear_carga',
+    params: {
+      'p_reparto_id': repartoId,
+      'p_codigo': codigo,
+      'p_formato': formato,
+      'p_escaneado_en': _hora(escaneadoEn),
+    },
+  ) as String;
 
   Future<void> quitarDeCarga(String repartoId, String codigo) =>
       _db.rpc('quitar_bulto_carga', params: {'p_reparto_id': repartoId, 'p_codigo': codigo});
@@ -343,16 +354,20 @@ class RepartidorRepository {
       (await _db.rpc('confirmar_carga', params: {'p_reparto_id': repartoId}) as num).toInt();
 
   /// 'ok', 'ya_entregado' o 'no_cargado'
-  Future<String> escanearEntrega(String repartoId, String tiendaId, String codigo) async =>
-      await _db.rpc(
-        'escanear_entrega',
-        params: {
-          'p_reparto_id': repartoId,
-          'p_tienda_id': tiendaId,
-          'p_codigo': codigo,
-          'p_escaneado_en': DateTime.now().toUtc().toIso8601String(),
-        },
-      ) as String;
+  Future<String> escanearEntrega(
+    String repartoId,
+    String tiendaId,
+    String codigo, {
+    DateTime? escaneadoEn,
+  }) async => await _db.rpc(
+    'escanear_entrega',
+    params: {
+      'p_reparto_id': repartoId,
+      'p_tienda_id': tiendaId,
+      'p_codigo': codigo,
+      'p_escaneado_en': _hora(escaneadoEn),
+    },
+  ) as String;
 
   /// Paquete que la tienda da al repartidor para devolver. Devuelve 'ok',
   /// 'duplicado' o 'duplicado_otro_reparto'.
@@ -360,15 +375,16 @@ class RepartidorRepository {
     String repartoId,
     String tiendaId,
     String codigo,
-    String? formato,
-  ) async => await _db.rpc(
+    String? formato, {
+    DateTime? escaneadoEn,
+  }) async => await _db.rpc(
     'escanear_devolucion',
     params: {
       'p_reparto_id': repartoId,
       'p_tienda_id': tiendaId,
       'p_codigo': codigo,
       'p_formato': formato,
-      'p_escaneado_en': DateTime.now().toUtc().toIso8601String(),
+      'p_escaneado_en': _hora(escaneadoEn),
     },
   ) as String;
 

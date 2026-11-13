@@ -171,7 +171,7 @@ void main() {
         expect(tester.takeException(), isNull);
         _accesible(tester, find.textContaining('Terminar carga'), tamano, 'terminar carga');
         _accesible(tester, find.byType(TextField), tamano, 'campo del código');
-        _accesible(tester, find.text('Usar'), tamano, 'botón usar');
+        _accesible(tester, find.byTooltip('Enviar código'), tamano, 'botón enviar');
         _accesible(tester, find.byTooltip('Leer desde foto'), tamano, 'leer desde foto');
         _accesible(tester, find.byTooltip('Ajustes'), tamano, 'ajustes');
         if (!esMovilHorizontal) {
@@ -194,7 +194,7 @@ void main() {
         _accesible(tester, find.textContaining('Foto de entrega'), tamano, 'foto de entrega');
         _accesible(tester, find.textContaining('Entregar ('), tamano, 'modo entregar');
         _accesible(tester, find.textContaining('Devoluciones ('), tamano, 'modo devoluciones');
-        _accesible(tester, find.text('Usar'), tamano, 'botón usar');
+        _accesible(tester, find.byTooltip('Enviar código'), tamano, 'botón enviar');
         _accesible(tester, find.byTooltip('Leer desde foto'), tamano, 'leer desde foto');
         if (!esMovilHorizontal) {
           _camaraVisible(tester, tamano);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/codigos.dart';
 import '../../core/errores.dart';
 import '../../core/formato.dart';
+import '../../core/plataforma/plataforma.dart';
 import '../../core/tema.dart';
 import '../../shared/escaner.dart';
 import '../../shared/estados.dart';
@@ -12,6 +15,7 @@ import '../../shared/panel_scaffold.dart';
 import '../../shared/responsive.dart';
 import '../../shared/ui.dart';
 import 'aviso_lectura.dart';
+import 'datos/cola_lecturas.dart';
 import 'datos/repartidor_repository.dart';
 
 /// Reparto abierto: carga (escanear bultos en la nave) o en ruta (entregar
@@ -29,35 +33,72 @@ class _RepartoPageState extends ConsumerState<RepartoPage> {
   DatosReparto? _datos;
   Object? _error;
 
-  /// Bultos del reparto, el más reciente primero. Se actualiza en local con
-  /// cada escaneo para no recargar todo.
-  List<BultoReparto> _bultos = [];
+  /// Bultos de la base de datos, más lo enviado desde esta pantalla.
+  List<BultoReparto> _base = [];
+
+  /// Lo que se muestra (el más reciente primero): los de la base de datos y las
+  /// lecturas aún sin enviar. Todas las vistas usan esta misma lista (también
+  /// la tienda abierta en otra pantalla) y se actualiza en el sitio.
+  final List<BultoReparto> _bultos = [];
+
+  StreamSubscription<ResultadoLectura>? _resultados;
 
   @override
   void initState() {
     super.initState();
+    _resultados = ref.read(colaLecturasProvider.notifier).resultados.listen(_alResponder);
     _cargar();
   }
 
-  Future<void> _cargar() async {
-    setState(() => _error = null);
+  @override
+  void dispose() {
+    _resultados?.cancel();
+    super.dispose();
+  }
+
+  /// `silencioso`: si falla, se sigue con lo que hay en pantalla.
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (!silencioso) setState(() => _error = null);
     try {
       final datos = await ref.read(repartidorRepositoryProvider).datosReparto(widget.reparto);
       if (!mounted) return;
       setState(() {
         _datos = datos;
-        _bultos = [...datos.bultos];
+        _base = datos.bultos;
+        _recalcular();
       });
     } catch (e) {
-      if (mounted) setState(() => _error = e);
+      if (mounted && !silencioso) setState(() => _error = e);
     }
   }
 
-  void _actualizar(void Function(List<BultoReparto> bultos) cambio) =>
-      setState(() => cambio(_bultos));
+  void _recalcular() {
+    final pendientes = ref
+        .read(colaLecturasProvider)
+        .pendientes
+        .where((l) => l.repartoId == widget.reparto.id);
+    _bultos
+      ..clear()
+      ..addAll(aplicarLecturas(_base, pendientes));
+  }
+
+  /// La base de datos ha respondido a una lectura enviada en segundo plano.
+  void _alResponder(ResultadoLectura r) {
+    if (r.lectura.repartoId != widget.reparto.id || !mounted) return;
+    final rechazo = r.rechazo;
+    if (rechazo == null) {
+      // Guardada: pasa a la base (la cola la quita justo después)
+      _base = aplicarLecturas(_base, [r.lectura], enviadas: true);
+      return;
+    }
+    vibrar(larga: true);
+    mostrarMensaje(context, rechazo, error: true);
+    unawaited(_cargar(silencioso: true));
+  }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(colaLecturasProvider, (_, _) => setState(_recalcular));
     final datos = _datos;
     if (_error != null) {
       return Center(
@@ -74,8 +115,8 @@ class _RepartoPageState extends ConsumerState<RepartoPage> {
     if (datos == null) return const Center(child: CircularProgressIndicator());
 
     return widget.reparto.estado == 'carga'
-        ? _VistaCarga(datos: datos, bultos: _bultos, alCambiar: _actualizar)
-        : _VistaEnRuta(datos: datos, bultos: _bultos, alCambiar: _actualizar, alRecargar: _cargar);
+        ? _VistaCarga(datos: datos, bultos: _bultos)
+        : _VistaEnRuta(datos: datos, bultos: _bultos, alRecargar: _cargar);
   }
 }
 
@@ -84,11 +125,10 @@ class _RepartoPageState extends ConsumerState<RepartoPage> {
 // =============================================================================
 
 class _VistaCarga extends ConsumerStatefulWidget {
-  const _VistaCarga({required this.datos, required this.bultos, required this.alCambiar});
+  const _VistaCarga({required this.datos, required this.bultos});
 
   final DatosReparto datos;
   final List<BultoReparto> bultos;
-  final void Function(void Function(List<BultoReparto>)) alCambiar;
 
   @override
   ConsumerState<_VistaCarga> createState() => _VistaCargaState();
@@ -104,13 +144,14 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
   bool _confirmando = false;
 
   RepartoActivo get _reparto => widget.datos.reparto;
+  ColaLecturas get _envios => ref.read(colaLecturasProvider.notifier);
 
   void _avisar(AvisoLectura aviso) {
     vibrarSegun(aviso.tipo);
     if (mounted) setState(() => _aviso = aviso);
   }
 
-  void _leido(LecturaCodigo lectura) => _cola.encolar(() => _cargarBulto(lectura));
+  Future<void> _leido(LecturaCodigo lectura) => _cola.encolar(() => _cargarBulto(lectura));
 
   Future<void> _cargarBulto(LecturaCodigo lectura) async {
     final resultado = extraerIdConReglas(lectura.contenido, widget.datos.reglas);
@@ -119,34 +160,20 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
       return;
     }
     final codigo = (resultado as IdValido).id;
-    try {
-      final respuesta = await ref
-          .read(repartidorRepositoryProvider)
-          .escanearCarga(_reparto.id, codigo, lectura.formato);
-      switch (respuesta) {
-        case 'ok':
-          widget.alCambiar(
-            (b) => b.insert(
-              0,
-              BultoReparto(
-                id: codigo,
-                codigo: codigo,
-                estado: 'cargado',
-                cargadoEn: DateTime.now(),
-              ),
-            ),
-          );
-          _avisar(
-            AvisoLectura('Cargado $codigo · ${widget.bultos.length} en total', TipoAviso.correcto),
-          );
-        case 'duplicado':
-          _avisar(AvisoLectura('DUPLICADO: $codigo ya está en tu carga', TipoAviso.aviso));
-        default:
-          _avisar(AvisoLectura('$codigo ya lo cargó hoy otro reparto', TipoAviso.error));
-      }
-    } catch (e) {
-      _avisar(AvisoLectura(mensajeError(e), TipoAviso.error));
+    // Los duplicados se comprueban en el móvil (sin esperar a la conexión); si
+    // otro reparto ya lo cargó, se avisa al enviarlo
+    if (widget.bultos.any((b) => b.codigo == codigo)) {
+      _avisar(AvisoLectura('DUPLICADO: $codigo ya está en tu carga', TipoAviso.aviso));
+      return;
     }
+    final total = widget.bultos.length + 1;
+    _envios.agregar(
+      tipo: TipoLectura.carga,
+      repartoId: _reparto.id,
+      codigo: codigo,
+      formato: lectura.formato,
+    );
+    _avisar(AvisoLectura('Cargado $codigo · $total en total', TipoAviso.correcto));
   }
 
   Future<void> _quitar(BultoReparto b) async {
@@ -160,21 +187,10 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
       return;
     }
     if (!mounted) return;
-    final ok = await ejecutar(
-      context,
-      () => ref.read(repartidorRepositoryProvider).quitarDeCarga(_reparto.id, b.codigo),
-    );
-    if (!ok) return;
-    widget.alCambiar((lista) => lista.removeWhere((x) => x.codigo == b.codigo));
+    final total = widget.bultos.length - 1;
+    _envios.quitar(tipo: TipoLectura.quitarCarga, repartoId: _reparto.id, codigo: b.codigo);
     // La franja indica el nuevo total (si no, seguiría mostrando el último escaneo)
-    if (mounted) {
-      setState(
-        () => _aviso = AvisoLectura(
-          'Quitado ${b.codigo} · ${widget.bultos.length} en total',
-          TipoAviso.aviso,
-        ),
-      );
-    }
+    setState(() => _aviso = AvisoLectura('Quitado ${b.codigo} · $total en total', TipoAviso.aviso));
   }
 
   Future<void> _terminar() async {
@@ -183,6 +199,12 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
       mostrarMensaje(context, 'Escanea al menos un bulto antes de terminar.', error: true);
       return;
     }
+    // Al terminar se envía todo lo pendiente: la carga no se confirma sin ello
+    setState(() => _confirmando = true);
+    final enviado = await enviarPendientes(context, ref, _reparto.id);
+    if (!mounted) return;
+    setState(() => _confirmando = false);
+    if (!enviado) return;
     if (!await confirmar(
       context,
       titulo: 'Terminar la carga',
@@ -260,16 +282,10 @@ class _VistaCargaState extends ConsumerState<_VistaCarga> {
 // =============================================================================
 
 class _VistaEnRuta extends ConsumerStatefulWidget {
-  const _VistaEnRuta({
-    required this.datos,
-    required this.bultos,
-    required this.alCambiar,
-    required this.alRecargar,
-  });
+  const _VistaEnRuta({required this.datos, required this.bultos, required this.alRecargar});
 
   final DatosReparto datos;
   final List<BultoReparto> bultos;
-  final void Function(void Function(List<BultoReparto>)) alCambiar;
   final Future<void> Function() alRecargar;
 
   @override
@@ -292,12 +308,7 @@ class _VistaEnRutaState extends ConsumerState<_VistaEnRuta> {
     }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => EntregaTiendaPage(
-          datos: datos,
-          tienda: tienda,
-          bultos: bultos,
-          alCambiar: widget.alCambiar,
-        ),
+        builder: (_) => EntregaTiendaPage(datos: datos, tienda: tienda, bultos: bultos),
       ),
     );
   }
@@ -336,6 +347,8 @@ class _VistaEnRutaState extends ConsumerState<_VistaEnRuta> {
   }
 
   Future<void> _cerrar() async {
+    // No se cierra con lecturas sin enviar: se perderían entregas
+    if (!await enviarPendientes(context, ref, datos.reparto.id) || !mounted) return;
     final pendientes = bultos.where((b) => b.estado == 'cargado').length;
     final cierre = await showDialog<_Cierre>(
       context: context,
@@ -389,7 +402,6 @@ class _VistaEnRutaState extends ConsumerState<_VistaEnRuta> {
                     datos: datos,
                     tienda: tienda,
                     bultos: bultos,
-                    alCambiar: widget.alCambiar,
                     alTerminar: () => setState(() => _tienda = null),
                   ),
             child: RefreshIndicator(
@@ -529,14 +541,14 @@ class EntregaTiendaPage extends ConsumerStatefulWidget {
     required this.datos,
     required this.tienda,
     required this.bultos,
-    required this.alCambiar,
     this.alTerminar,
   });
 
   final DatosReparto datos;
   final TiendaReparto tienda;
+
+  /// Lista compartida con la pantalla del reparto (se actualiza en el sitio).
   final List<BultoReparto> bultos;
-  final void Function(void Function(List<BultoReparto>)) alCambiar;
 
   /// Si se da, la vista va incrustada en un panel (ordenador): sin barra
   /// superior propia y «Terminar tienda» llama a esto en vez de volver atrás.
@@ -565,6 +577,7 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
 
   List<BultoReparto> get _entregadosAqui => _deEstaTienda('entregado');
   List<BultoReparto> get _devolucionesAqui => _deEstaTienda('devolucion');
+  ColaLecturas get _envios => ref.read(colaLecturasProvider.notifier);
 
   void _avisar(AvisoLectura aviso) {
     vibrarSegun(aviso.tipo);
@@ -572,9 +585,9 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
   }
 
   // El modo se fija al leer, por si se cambia mientras hay lecturas en cola
-  void _leido(LecturaCodigo lectura) {
+  Future<void> _leido(LecturaCodigo lectura) {
     final devolucion = _devolucion;
-    _cola.encolar(() => devolucion ? _recogerDevolucion(lectura) : _entregar(lectura));
+    return _cola.encolar(() => devolucion ? _recogerDevolucion(lectura) : _entregar(lectura));
   }
 
   /// ID del código según las reglas de los clientes, o null (ya avisado).
@@ -590,47 +603,27 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
   Future<void> _recogerDevolucion(LecturaCodigo lectura) async {
     final codigo = _codigoValido(lectura);
     if (codigo == null) return;
-    try {
-      final respuesta = await ref
-          .read(repartidorRepositoryProvider)
-          .escanearDevolucion(widget.datos.reparto.id, widget.tienda.id, codigo, lectura.formato);
-      switch (respuesta) {
-        case 'ok':
-          widget.alCambiar(
-            (lista) => lista.insert(
-              0,
-              BultoReparto(
-                id: codigo,
-                codigo: codigo,
-                estado: 'devolucion',
-                tiendaId: widget.tienda.id,
-                cargadoEn: DateTime.now(),
-              ),
-            ),
-          );
-          _avisar(
-            AvisoLectura(
-              'Devolución $codigo · ${_devolucionesAqui.length} de esta tienda',
-              TipoAviso.correcto,
-            ),
-          );
-        case 'duplicado':
-          final b = widget.bultos.where((b) => b.codigo == codigo).firstOrNull;
-          _avisar(
-            AvisoLectura(
-              b?.estado == 'devolucion'
-                  ? 'DUPLICADO: $codigo ya está como devolución'
-                  : '$codigo es un bulto de tu carga, no una devolución',
-              TipoAviso.aviso,
-            ),
-          );
-        default:
-          _avisar(AvisoLectura('$codigo ya se registró hoy en otro reparto', TipoAviso.error));
-      }
-      if (mounted) setState(() {});
-    } catch (e) {
-      _avisar(AvisoLectura(mensajeError(e), TipoAviso.error));
+    final b = widget.bultos.where((b) => b.codigo == codigo).firstOrNull;
+    if (b != null) {
+      _avisar(
+        AvisoLectura(
+          b.estado == 'devolucion'
+              ? 'DUPLICADO: $codigo ya está como devolución'
+              : '$codigo es un bulto de tu carga, no una devolución',
+          TipoAviso.aviso,
+        ),
+      );
+      return;
     }
+    final total = _devolucionesAqui.length + 1;
+    _envios.agregar(
+      tipo: TipoLectura.devolucion,
+      repartoId: widget.datos.reparto.id,
+      tiendaId: widget.tienda.id,
+      codigo: codigo,
+      formato: lectura.formato,
+    );
+    _avisar(AvisoLectura('Devolución $codigo · $total de esta tienda', TipoAviso.correcto));
   }
 
   Future<void> _quitarDevolucion(BultoReparto b) async {
@@ -644,24 +637,15 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
       return;
     }
     if (!mounted) return;
-    final ok = await ejecutar(
-      context,
-      () => ref
-          .read(repartidorRepositoryProvider)
-          .quitarDevolucion(widget.datos.reparto.id, b.codigo),
+    final total = _devolucionesAqui.length - 1;
+    _envios.quitar(
+      tipo: TipoLectura.quitarDevolucion,
+      repartoId: widget.datos.reparto.id,
+      codigo: b.codigo,
     );
-    if (!ok) return;
-    widget.alCambiar(
-      (lista) => lista.removeWhere((x) => x.codigo == b.codigo && x.estado == 'devolucion'),
+    setState(
+      () => _aviso = AvisoLectura('Quitada ${b.codigo} · $total de esta tienda', TipoAviso.aviso),
     );
-    if (mounted) {
-      setState(
-        () => _aviso = AvisoLectura(
-          'Quitada ${b.codigo} · ${_devolucionesAqui.length} de esta tienda',
-          TipoAviso.aviso,
-        ),
-      );
-    }
   }
 
   /// Último recurso si ni la cámara ni la foto leen la etiqueta: se marca
@@ -684,48 +668,35 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
   Future<void> _entregar(LecturaCodigo lectura) async {
     final codigo = _codigoValido(lectura);
     if (codigo == null) return;
-    try {
-      final respuesta = await ref
-          .read(repartidorRepositoryProvider)
-          .escanearEntrega(widget.datos.reparto.id, widget.tienda.id, codigo);
-      switch (respuesta) {
-        case 'ok':
-          widget.alCambiar((lista) {
-            final i = lista.indexWhere((b) => b.codigo == codigo);
-            final nuevo = BultoReparto(
-              id: i >= 0 ? lista[i].id : codigo,
-              codigo: codigo,
-              estado: 'entregado',
-              tiendaId: widget.tienda.id,
-              cargadoEn: i >= 0 ? lista[i].cargadoEn : DateTime.now(),
-              entregadoEn: DateTime.now(),
-            );
-            if (i >= 0) lista.removeAt(i);
-            lista.insert(0, nuevo);
-          });
-          _avisar(
-            AvisoLectura(
-              'Entregado $codigo · ${_entregadosAqui.length} en esta tienda',
-              TipoAviso.correcto,
-            ),
-          );
-        case 'ya_entregado':
-          final otra = widget.bultos.where((b) => b.codigo == codigo).firstOrNull?.tiendaId;
-          final nombreOtra = widget.datos.tiendas.where((t) => t.id == otra).firstOrNull?.nombre;
-          _avisar(
-            AvisoLectura(
-              otra == widget.tienda.id || nombreOtra == null
-                  ? 'DUPLICADO: $codigo ya estaba entregado aquí'
-                  : '$codigo ya se entregó en $nombreOtra',
-              TipoAviso.aviso,
-            ),
-          );
-        default:
-          _avisar(AvisoLectura('$codigo no está en tu carga', TipoAviso.error));
-      }
-      if (mounted) setState(() {});
-    } catch (e) {
-      _avisar(AvisoLectura(mensajeError(e), TipoAviso.error));
+    // Se comprueba con la carga que hay en el móvil, sin esperar a la conexión
+    final b = widget.bultos.where((b) => b.codigo == codigo).firstOrNull;
+    switch (b?.estado) {
+      case null:
+        _avisar(AvisoLectura('$codigo no está en tu carga', TipoAviso.error));
+      case 'devolucion':
+        _avisar(
+          AvisoLectura('$codigo es una devolución, no un bulto de tu carga', TipoAviso.aviso),
+        );
+      case 'cargado':
+        final total = _entregadosAqui.length + 1;
+        _envios.agregar(
+          tipo: TipoLectura.entrega,
+          repartoId: widget.datos.reparto.id,
+          tiendaId: widget.tienda.id,
+          codigo: codigo,
+        );
+        _avisar(AvisoLectura('Entregado $codigo · $total en esta tienda', TipoAviso.correcto));
+      default:
+        final otra = b!.tiendaId;
+        final nombreOtra = widget.datos.tiendas.where((t) => t.id == otra).firstOrNull?.nombre;
+        _avisar(
+          AvisoLectura(
+            otra == widget.tienda.id || nombreOtra == null
+                ? 'DUPLICADO: $codigo ya estaba entregado aquí'
+                : '$codigo ya se entregó en $nombreOtra',
+            TipoAviso.aviso,
+          ),
+        );
     }
   }
 
@@ -764,6 +735,8 @@ class _EntregaTiendaPageState extends ConsumerState<EntregaTiendaPage> {
 
   @override
   Widget build(BuildContext context) {
+    // En el móvil esta pantalla va aparte: se redibuja cuando cambia la cola
+    ref.watch(colaLecturasProvider);
     final tema = Theme.of(context);
     final entregadosAqui = _entregadosAqui;
     final devolucionesAqui = _devolucionesAqui;
@@ -1136,38 +1109,104 @@ class _Cabecera extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: tema.colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(titulo, style: tema.textTheme.titleMedium, overflow: TextOverflow.ellipsis),
-                  Text(detalle, style: tema.textTheme.bodySmall),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            child: Row(
               children: [
-                Text(
-                  '$contador',
-                  style: tema.textTheme.headlineMedium?.copyWith(
-                    color: tema.colorScheme.primary,
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        titulo,
+                        style: tema.textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(detalle, style: tema.textTheme.bodySmall),
+                    ],
                   ),
                 ),
-                Text(etiquetaContador, style: tema.textTheme.bodySmall),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$contador',
+                      style: tema.textTheme.headlineMedium?.copyWith(
+                        color: tema.colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(etiquetaContador, style: tema.textTheme.bodySmall),
+                  ],
+                ),
+                if (ajustes) ...[const SizedBox(width: 4), const BotonAjustes()],
               ],
             ),
-            if (ajustes) ...[const SizedBox(width: 4), const BotonAjustes()],
-          ],
+          ),
+          const _EstadoEnvios(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Franja con las lecturas guardadas en el móvil que aún no han llegado a la
+/// base de datos. No se ve si está todo enviado.
+class _EstadoEnvios extends ConsumerWidget {
+  const _EstadoEnvios();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cola = ref.watch(colaLecturasProvider);
+    final n = cola.pendientes.length;
+    if (n == 0) return const SizedBox.shrink();
+    final texto = cola.sinConexion
+        ? '${cantidad(n, 'lectura')} sin enviar · sin conexión. Se enviarán solas, '
+              'puedes seguir escaneando.'
+        : 'Enviando ${cantidad(n, 'lectura')}…';
+    return Material(
+      color: ColoresEstado.aviso.withValues(alpha: cola.sinConexion ? 0.18 : 0.08),
+      child: InkWell(
+        onTap: () => unawaited(ref.read(colaLecturasProvider.notifier).enviarAhora()),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+          child: Row(
+            children: [
+              Icon(
+                cola.sinConexion ? Icons.cloud_off_outlined : Icons.cloud_upload_outlined,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Text(texto, style: Theme.of(context).textTheme.bodySmall)),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Envía ya las lecturas pendientes del reparto (al terminar la carga o cerrar).
+/// Devuelve false, con un aviso, si no se ha podido enviar todo.
+Future<bool> enviarPendientes(BuildContext context, WidgetRef ref, String repartoId) async {
+  if (ref.read(colaLecturasProvider).pendientesDe(repartoId) == 0) return true;
+  final cola = ref.read(colaLecturasProvider.notifier);
+  await cola.enviarAhora();
+  final quedan = ref.read(colaLecturasProvider).pendientesDe(repartoId);
+  if (quedan == 0) return true;
+  if (context.mounted) {
+    mostrarMensaje(
+      context,
+      'Faltan ${cantidad(quedan, 'lectura')} por enviar y ahora no hay conexión. '
+      'Se enviarán solas en cuanto la haya; inténtalo de nuevo en un momento.',
+      error: true,
+    );
+  }
+  return false;
 }
 
 class _ListaBultos extends StatelessWidget {
@@ -1206,12 +1245,12 @@ class _ListaBultos extends StatelessWidget {
         final b = bultos[i - 1];
         return ListTile(
           dense: true,
-          leading: const Icon(Icons.inventory_2_outlined),
+          leading: _IconoBulto(b),
           title: Text(
             b.codigo,
             style: const TextStyle(fontSize: 16, fontFeatures: [FontFeature.tabularFigures()]),
           ),
-          subtitle: Text(fechaHora(b.entregadoEn ?? b.cargadoEn).substring(11)),
+          subtitle: Text(_hora(b)),
           trailing: alQuitar == null
               ? EtiquetaBulto(b.estado)
               : IconButton(
@@ -1223,6 +1262,26 @@ class _ListaBultos extends StatelessWidget {
       },
     );
   }
+}
+
+/// Hora del bulto y, si aún no ha llegado a la base de datos, «sin enviar».
+String _hora(BultoReparto b) {
+  final hora = fechaHora(b.entregadoEn ?? b.cargadoEn).substring(11);
+  return b.sinEnviar ? '$hora · sin enviar' : hora;
+}
+
+class _IconoBulto extends StatelessWidget {
+  const _IconoBulto(this.bulto);
+
+  final BultoReparto bulto;
+
+  @override
+  Widget build(BuildContext context) => bulto.sinEnviar
+      ? const Tooltip(
+          message: 'Guardado en el móvil, pendiente de enviar',
+          child: Icon(Icons.cloud_upload_outlined, color: ColoresEstado.aviso),
+        )
+      : const Icon(Icons.inventory_2_outlined);
 }
 
 /// Buscador de tiendas para añadir temporalmente al reparto.
@@ -1361,12 +1420,12 @@ class _ListaEntrega extends StatelessWidget {
     );
     Widget fila(BultoReparto b, Widget final_) => ListTile(
       dense: true,
-      leading: const Icon(Icons.inventory_2_outlined),
+      leading: _IconoBulto(b),
       title: Text(
         b.codigo,
         style: const TextStyle(fontSize: 16, fontFeatures: [FontFeature.tabularFigures()]),
       ),
-      subtitle: Text(fechaHora(b.entregadoEn ?? b.cargadoEn).substring(11)),
+      subtitle: Text(_hora(b)),
       trailing: final_,
     );
 

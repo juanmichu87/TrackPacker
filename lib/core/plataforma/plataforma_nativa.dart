@@ -7,6 +7,9 @@ import '../codigos.dart';
 /// En Android/iOS no hay pantalla de carga en HTML.
 void quitarPantallaCarga() {}
 
+/// En Android/iOS el teclado ya ajusta la vista.
+void prepararTeclado() {}
+
 /// Vibración corta (lectura correcta) o larga (error o duplicado).
 void vibrar({bool larga = false}) {
   larga ? HapticFeedback.heavyImpact() : HapticFeedback.mediumImpact();
